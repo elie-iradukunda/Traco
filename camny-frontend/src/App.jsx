@@ -14,6 +14,7 @@ import ManageDrivers from "./pages/Admin/ManageDrivers";
 import ManageRoutes from "./pages/Admin/ManageRoutes";
 import VehiclesPage from "./pages/Admin/Vehicles";
 import NotificationsAdmin from "./pages/Admin/Notifications";
+import RegisterDriver from "./pages/Admin/RegisterDriver";
 
 // Driver Pages
 import DriverDashboard from "./pages/Driver/DriverDashboard";
@@ -46,6 +47,9 @@ const App = () => {
             <Link className="text-blue-600 hover:underline" to="/admin/manage-routes">Manage Routes</Link>
             <Link className="text-blue-600 hover:underline" to="/admin/vehicles">Vehicles</Link>
             <Link className="text-blue-600 hover:underline" to="/admin/notifications">Notifications</Link>
+
+
+           
 
             {/* Driver Links */}
             <Link className="text-blue-600 hover:underline" to="/driver/dashboard">Driver Dashboard</Link>
@@ -86,6 +90,8 @@ const App = () => {
                 </PrivateRoute>
               }
             />
+
+             <Route path="/admin/register-driver" element={<RegisterDriver />} />
             <Route
               path="/admin/vehicles"
               element={

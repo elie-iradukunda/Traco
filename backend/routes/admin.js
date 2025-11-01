@@ -9,6 +9,8 @@ import {
   updateVehicle,
   deleteVehicle,
   assignDriverToVehicle,
+  assignVehicleToRoute,
+  assignDriverToRoute,
   getAllRoutes,
   addRoute,
   updateRoute,
@@ -16,7 +18,8 @@ import {
   getCompanies,
   getAllUsers,
   getAllTickets,
-  getStats
+  getStats,
+  registerDriverUser
 } from "../controllers/adminController.js";
 
 import { authMiddleware, authorizeRole } from "../middleware/authMiddleware.js";
@@ -34,6 +37,9 @@ router.post("/drivers", addDriver);
 router.put("/drivers/:id", updateDriver);
 router.delete("/drivers/:id", deleteDriver);
 
+router.post("/drivers/register", registerDriverUser);
+
+
 // ------------------- VEHICLES -------------------
 // Admin-only
 router.get("/vehicles", authMiddleware, authorizeRole("admin"), getAllVehicles);
@@ -42,6 +48,24 @@ router.put("/vehicles/:id", authMiddleware, authorizeRole("admin"), updateVehicl
 router.delete("/vehicles/:id", authMiddleware, authorizeRole("admin"), deleteVehicle);
 
 router.post("/vehicles/:vehicleId/assign-driver", authMiddleware, authorizeRole("admin"), assignDriverToVehicle);
+router.put(
+  "/routes/:routeId/assign-vehicle",
+  authMiddleware,
+  authorizeRole("admin"),
+  assignVehicleToRoute
+);
+
+
+// Assign driver to route
+// Assign driver to route
+router.post(
+  "/routes/:routeId/assign-driver",
+  authMiddleware,
+  authorizeRole("admin"),
+  assignDriverToRoute
+);
+
+
 
 // ------------------- ROUTES -------------------
 // Admin-only

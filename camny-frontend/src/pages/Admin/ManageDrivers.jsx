@@ -2,32 +2,43 @@ import React, { useEffect, useState } from "react";
 import {
   getAllDrivers,
   getAllUsers,
+  getAllVehicles,
+  getAllRoutes,
   addDriver,
   updateDriver,
   deleteDriver,
-  getAllRoutes,
-  sendNotification,
   assignDriverToVehicle,
+  assignDriverToRoute,
+  sendNotification
 } from "../../services/api";
 
 const ManageDrivers = () => {
   const [drivers, setDrivers] = useState([]);
   const [users, setUsers] = useState([]);
+  const [vehicles, setVehicles] = useState([]);
   const [routes, setRoutes] = useState([]);
   const [loading, setLoading] = useState(true);
+
   const [newDriver, setNewDriver] = useState({
     user_id: "",
-    license_number: "",
+    license_id: "",
     status: "active",
   });
+
   const [editMode, setEditMode] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState(null);
-  const [selectedRoute, setSelectedRoute] = useState({}); // per driver
+  const [selectedVehicle, setSelectedVehicle] = useState({});
+  const [selectedRoute, setSelectedRoute] = useState({});
 
   useEffect(() => {
     const fetchAll = async () => {
       setLoading(true);
-      await Promise.all([fetchDrivers(), fetchUsers(), fetchRoutes()]);
+      await Promise.all([
+        fetchDrivers(),
+        fetchUsers(),
+        fetchVehicles(),
+        fetchRoutes()
+      ]);
       setLoading(false);
     };
     fetchAll();
@@ -38,7 +49,7 @@ const ManageDrivers = () => {
       const res = await getAllDrivers();
       setDrivers(res.data || []);
     } catch (err) {
-      console.error("Error fetching drivers:", err);
+      console.error(err);
     }
   };
 
@@ -47,7 +58,16 @@ const ManageDrivers = () => {
       const res = await getAllUsers();
       setUsers(res.data || []);
     } catch (err) {
-      console.error("Error fetching users:", err);
+      console.error(err);
+    }
+  };
+
+  const fetchVehicles = async () => {
+    try {
+      const res = await getAllVehicles();
+      setVehicles(res.data || []);
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -56,7 +76,7 @@ const ManageDrivers = () => {
       const res = await getAllRoutes();
       setRoutes(res.data || []);
     } catch (err) {
-      console.error("Error fetching routes:", err);
+      console.error(err);
     }
   };
 
@@ -68,12 +88,13 @@ const ManageDrivers = () => {
       } else {
         await addDriver(newDriver);
       }
-      setNewDriver({ user_id: "", license_number: "", status: "active" });
+      setNewDriver({ user_id: "", license_id: "", status: "active" });
       setEditMode(false);
       setSelectedDriver(null);
       fetchDrivers();
     } catch (err) {
-      console.error("Error saving driver:", err);
+      console.error(err);
+      alert("Failed to create/update driver");
     }
   };
 
@@ -83,7 +104,8 @@ const ManageDrivers = () => {
       await deleteDriver(driverId);
       fetchDrivers();
     } catch (err) {
-      console.error("Error deleting driver:", err);
+      console.error(err);
+      alert("Failed to delete driver");
     }
   };
 
@@ -92,162 +114,150 @@ const ManageDrivers = () => {
     setSelectedDriver(driver);
     setNewDriver({
       user_id: driver.user_id,
-      license_number: driver.license_number,
+      license_id: driver.license_id || driver.license_number || "",
       status: driver.status,
     });
   };
 
-  const assignDriverToRouteHandler = async (driverId) => {
-    const routeId = selectedRoute[driverId];
-    if (!routeId) return alert("Please select a route first!");
+  const assignDriverToVehicleHandler = async (driverId) => {
+    const vehicleId = selectedVehicle[driverId];
+    if (!vehicleId) return alert("Select a vehicle first!");
     try {
-      // Adapt backend if needed
-      await assignDriverToVehicle(routeId, driverId);
-
-      // Notify driver
-      const route = routes.find((r) => r.route_id === routeId);
-      await sendNotification({
-        user_id: driverId,
-        message: `You have been assigned to route: ${route.route_name} (${route.start_location} - ${route.end_location})`,
-      });
-
-      alert("Driver assigned and notified successfully!");
-      setSelectedRoute({ ...selectedRoute, [driverId]: "" });
+      await assignDriverToVehicle(vehicleId, driverId);
+      alert("Driver assigned to vehicle!");
+      setSelectedVehicle({ ...selectedVehicle, [driverId]: "" });
       fetchDrivers();
     } catch (err) {
-      console.error("Error assigning driver:", err);
+      console.error(err);
+      alert("Failed to assign vehicle.");
     }
   };
 
-  if (loading) return <p className="p-4">Loading...</p>;
+  const assignDriverToRouteHandler = async (driverId) => {
+    const routeId = selectedRoute[driverId];
+    if (!routeId) return alert("Select a route first!");
+    try {
+      await assignDriverToRoute(routeId, driverId);
+      const route = routes.find((r) => r.route_id === parseInt(routeId));
+      if (route) {
+        await sendNotification({
+          user_id: driverId,
+          message: `You have been assigned to route: ${route.route_name}`
+        });
+      }
+      alert("Driver assigned to route!");
+      setSelectedRoute({ ...selectedRoute, [driverId]: "" });
+      fetchDrivers();
+    } catch (err) {
+      console.error(err);
+      alert("Failed to assign route.");
+    }
+  };
+
+  if (loading) return <div className="flex justify-center items-center h-screen">Loading...</div>;
 
   return (
-    <div className="p-6 bg-gray-100 min-h-screen">
-      <h1 className="text-2xl font-bold mb-6">Manage Drivers</h1>
+    <div className="p-6 bg-gray-100 min-h-screen space-y-8">
+      <h1 className="text-3xl font-bold text-gray-800">Manage Drivers</h1>
 
       {/* Driver Form */}
-      <form
-        onSubmit={handleCreateOrUpdate}
-        className="bg-white p-6 rounded-lg shadow-md mb-6 max-w-xl flex flex-col gap-4"
-      >
+      <form onSubmit={handleCreateOrUpdate} className="bg-white p-6 rounded-xl shadow-lg max-w-xl mx-auto flex flex-col gap-4">
+        <h2 className="text-xl font-semibold text-gray-700">{editMode ? "Edit Driver" : "Add New Driver"}</h2>
+
         {!editMode && (
           <select
             value={newDriver.user_id}
-            onChange={(e) =>
-              setNewDriver({ ...newDriver, user_id: e.target.value })
-            }
-            className="border p-2 rounded"
+            onChange={(e) => setNewDriver({ ...newDriver, user_id: e.target.value })}
+            className="border p-2 rounded-lg"
             required
           >
             <option value="">Select User</option>
             {users.map((u) => (
-              <option key={u.user_id} value={u.user_id}>
-                {u.full_name} ({u.email})
-              </option>
+              <option key={u.user_id} value={u.user_id}>{u.full_name || u.email} ({u.email})</option>
             ))}
           </select>
         )}
+
         <input
           type="text"
           placeholder="License Number"
-          value={newDriver.license_number}
-          onChange={(e) =>
-            setNewDriver({ ...newDriver, license_number: e.target.value })
-          }
-          className="border p-2 rounded"
+          value={newDriver.license_id}
+          onChange={(e) => setNewDriver({ ...newDriver, license_id: e.target.value })}
+          className="border p-2 rounded-lg"
           required
         />
-        <select
-          value={newDriver.status}
-          onChange={(e) => setNewDriver({ ...newDriver, status: e.target.value })}
-          className="border p-2 rounded"
-        >
+
+        <select value={newDriver.status} onChange={(e) => setNewDriver({ ...newDriver, status: e.target.value })} className="border p-2 rounded-lg">
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
         </select>
 
-        <button
-          type="submit"
-          className="bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
-        >
-          {editMode ? "Update Driver" : "Add Driver"}
-        </button>
+        <div className="flex gap-4">
+          <button type="submit" className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">{editMode ? "Update Driver" : "Add Driver"}</button>
+          {editMode && <button type="button" onClick={() => { setEditMode(false); setSelectedDriver(null); setNewDriver({ user_id: "", license_id: "", status: "active" }); }}
+            className="flex-1 bg-gray-300 py-2 rounded-lg hover:bg-gray-400">Cancel</button>}
+        </div>
       </form>
 
       {/* Drivers Table */}
-      <div className="bg-white shadow-md rounded-lg p-4">
-        <h2 className="text-lg font-semibold mb-3">All Drivers</h2>
-        <table className="w-full border-collapse">
-          <thead>
-            <tr className="bg-gray-200">
-              <th className="border p-2 text-left">Name</th>
-              <th className="border p-2 text-left">Email</th>
-              <th className="border p-2 text-left">Phone</th>
-              <th className="border p-2 text-left">License</th>
-              <th className="border p-2 text-left">Status</th>
-              <th className="border p-2 text-left">Assign Route</th>
-              <th className="border p-2 text-center">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {drivers.length > 0 ? (
-              drivers.map((d) => (
-                <tr key={d.driver_id}>
-                  <td className="border p-2">{d.full_name}</td>
-                  <td className="border p-2">{d.email}</td>
-                  <td className="border p-2">{d.phone}</td>
-                  <td className="border p-2">{d.license_number}</td>
-                  <td className="border p-2">{d.status}</td>
-                  <td className="border p-2">
-                    <select
-                      value={selectedRoute[d.driver_id] || ""}
-                      onChange={(e) =>
-                        setSelectedRoute({
-                          ...selectedRoute,
-                          [d.driver_id]: e.target.value,
-                        })
-                      }
-                      className="border p-1 rounded"
-                    >
-                      <option value="">Select Route</option>
-                      {routes.map((r) => (
-                        <option key={r.route_id} value={r.route_id}>
-                          {r.route_name} ({r.start_location} - {r.end_location})
-                        </option>
-                      ))}
+      <div className="bg-white p-6 rounded-xl shadow-lg">
+        <h2 className="text-xl font-semibold text-gray-700 mb-4">All Drivers</h2>
+        <div className="overflow-x-auto">
+          <table className="min-w-full border-collapse">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="p-3 text-left">Name</th>
+                <th className="p-3 text-left">Email</th>
+                <th className="p-3 text-left">Phone</th>
+                <th className="p-3 text-left">License</th>
+                <th className="p-3 text-left">Status</th>
+                <th className="p-3 text-left">Assign Vehicle</th>
+                <th className="p-3 text-left">Assign Route</th>
+                <th className="p-3 text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {drivers.length > 0 ? drivers.map((d) => (
+                <tr key={d.driver_id} className="hover:bg-gray-50">
+                  <td className="p-3">{d.full_name || "N/A"}</td>
+                  <td className="p-3">{d.email || "N/A"}</td>
+                  <td className="p-3">{d.phone || "N/A"}</td>
+                  <td className="p-3">{d.license_id || "N/A"}</td>
+                  <td className="p-3">{d.status?.toUpperCase() || "N/A"}</td>
+
+                  {/* Vehicle */}
+                  <td className="p-3 flex gap-2">
+                    <select value={selectedVehicle[d.driver_id] || ""} onChange={(e) =>
+                      setSelectedVehicle({ ...selectedVehicle, [d.driver_id]: e.target.value })} className="border p-1 rounded-lg">
+                      <option value="">Select Vehicle</option>
+                      {vehicles.map((v) => (<option key={v.vehicle_id} value={v.vehicle_id}>{v.plate_number} ({v.model})</option>))}
                     </select>
-                    <button
-                      onClick={() => assignDriverToRouteHandler(d.driver_id)}
-                      className="bg-green-500 text-white px-3 py-1 rounded ml-2 hover:bg-green-600"
-                    >
-                      Assign
-                    </button>
+                    <button onClick={() => assignDriverToVehicleHandler(d.driver_id)} className="bg-green-500 text-white px-3 py-1 rounded-lg hover:bg-green-600">Assign</button>
                   </td>
-                  <td className="border p-2 text-center space-x-2">
-                    <button
-                      onClick={() => handleEdit(d)}
-                      className="bg-yellow-400 text-white px-3 py-1 rounded hover:bg-yellow-500"
-                    >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDelete(d.driver_id)}
-                      className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
-                    >
-                      Delete
-                    </button>
+
+                  {/* Route */}
+                  <td className="p-3 flex gap-2">
+                    <select value={selectedRoute[d.driver_id] || ""} onChange={(e) =>
+                      setSelectedRoute({ ...selectedRoute, [d.driver_id]: e.target.value })} className="border p-1 rounded-lg">
+                      <option value="">Select Route</option>
+                      {routes.map((r) => (<option key={r.route_id} value={r.route_id}>{r.route_name} ({r.start_location}-{r.end_location})</option>))}
+                    </select>
+                    <button onClick={() => assignDriverToRouteHandler(d.driver_id)} className="bg-purple-500 text-white px-3 py-1 rounded-lg hover:bg-purple-600">Assign</button>
+                  </td>
+
+                  <td className="p-3 flex justify-center gap-2">
+                    <button onClick={() => handleEdit(d)} className="bg-yellow-400 text-white px-3 py-1 rounded-lg hover:bg-yellow-500">Edit</button>
+                    <button onClick={() => handleDelete(d.driver_id)} className="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600">Delete</button>
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td colSpan="7" className="text-center p-3 text-gray-500">
-                  No drivers found
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              )) : (
+                <tr>
+                  <td colSpan={8} className="text-center p-3">No drivers found</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
