@@ -29,6 +29,10 @@ router.get("/drivers", authMiddleware, authorizeRole("admin"), getAllDrivers);
 router.post("/drivers", authMiddleware, authorizeRole("admin"), addDriver); // admin creates driver
 router.put("/drivers/:id", authMiddleware, authorizeRole("admin"), updateDriver);
 router.delete("/drivers/:id", authMiddleware, authorizeRole("admin"), deleteDriver);
+router.get("/drivers", getAllDrivers);
+router.post("/drivers", addDriver);
+router.put("/drivers/:id", updateDriver);
+router.delete("/drivers/:id", deleteDriver);
 
 // ------------------- VEHICLES -------------------
 // Admin-only

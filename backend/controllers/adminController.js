@@ -1,71 +1,135 @@
 // backend/controllers/adminController.js
 import { pool } from "../db.js";
 
-// ------------------- DRIVERS -------------------
+
+
+// ------------------- GET ALL DRIVERS -------------------
 export const getAllDrivers = async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT d.driver_id, u.full_name, u.email, u.phone, d.license_number, d.status
+      SELECT 
+        d.driver_id, 
+        u.full_name, 
+        u.email, 
+        u.phone, 
+        d.license_number, 
+        d.status
       FROM drivers d
       JOIN users u ON d.user_id = u.user_id
       ORDER BY d.driver_id ASC
     `);
     res.status(200).json(result.rows);
   } catch (err) {
-    console.error(err);
+    console.error("❌ Error fetching drivers:", err);
     res.status(500).json({ error: "Failed to fetch drivers" });
   }
 };
 
+// ------------------- ADD DRIVER -------------------
+
+
 export const addDriver = async (req, res) => {
   try {
-    const { user_id, license_number, status } = req.body;
-    const result = await pool.query(`
-      INSERT INTO drivers (user_id, license_number, status)
-      SELECT u.user_id, $1, $2
-      FROM users u
-      WHERE u.user_id = $3
-        AND u.user_id NOT IN (SELECT user_id FROM drivers)
-      RETURNING *;
-    `, [license_number, status, user_id]);
+    const { full_name, email, phone, password, license_number, status } = req.body;
 
-    if (result.rowCount === 0) {
-      return res.status(400).json({ error: "User is already a driver or does not exist" });
+    if (!full_name || !email || !phone || !password || !license_number) {
+      return res.status(400).json({ error: "Missing required fields" });
     }
-    res.status(201).json({ data: result.rows[0] });
+
+    await pool.query("BEGIN"); // Start transaction
+
+    // 1️⃣ Add user with role = 'driver'
+    const userInsert = `
+      INSERT INTO users (full_name, email, phone, password, role)
+      VALUES ($1, $2, $3, $4, 'driver')
+      RETURNING user_id;
+    `;
+    const userResult = await pool.query(userInsert, [
+      full_name,
+      email,
+      phone,
+      password,
+    ]);
+    const user_id = userResult.rows[0].user_id;
+
+    // 2️⃣ Add linked driver record
+    const driverInsert = `
+      INSERT INTO drivers (user_id, license_number, status)
+      VALUES ($1, $2, $3)
+      RETURNING driver_id;
+    `;
+    const driverResult = await pool.query(driverInsert, [
+      user_id,
+      license_number,
+      status || "active",
+    ]);
+
+    await pool.query("COMMIT");
+
+    res.status(201).json({
+      message: "Driver created successfully",
+      driver: {
+        driver_id: driverResult.rows[0].driver_id,
+        full_name,
+        email,
+        phone,
+        license_number,
+        status: status || "active",
+      },
+    });
   } catch (err) {
-    console.error(err);
+    await pool.query("ROLLBACK");
+    console.error("❌ Error creating driver:", err);
     res.status(500).json({ error: "Failed to add driver" });
   }
 };
 
+// ------------------- UPDATE DRIVER -------------------
 export const updateDriver = async (req, res) => {
   try {
     const { id } = req.params;
     const { license_number, status } = req.body;
+
     const result = await pool.query(
-      `UPDATE drivers SET license_number=$1, status=$2 WHERE driver_id=$3 RETURNING *`,
+      `UPDATE drivers 
+       SET license_number = COALESCE($1, license_number), 
+           status = COALESCE($2, status)
+       WHERE driver_id = $3
+       RETURNING *`,
       [license_number, status, id]
     );
-    res.status(200).json(result.rows[0]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Driver not found" });
+    }
+
+    res.status(200).json({ message: "Driver updated successfully", driver: result.rows[0] });
   } catch (err) {
-    console.error(err);
+    console.error("❌ Error updating driver:", err);
     res.status(500).json({ error: "Failed to update driver" });
   }
 };
 
+// ------------------- DELETE DRIVER -------------------
 export const deleteDriver = async (req, res) => {
   try {
     const { id } = req.params;
+
     await pool.query("UPDATE vehicles SET assigned_driver = NULL WHERE assigned_driver = $1", [id]);
     await pool.query("DELETE FROM driver_assignments WHERE driver_id = $1", [id]);
-    await pool.query("DELETE FROM drivers WHERE driver_id = $1", [id]);
+    const result = await pool.query("DELETE FROM drivers WHERE driver_id = $1 RETURNING *", [id]);
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({ error: "Driver not found" });
+    }
+
     res.status(200).json({ message: "Driver deleted successfully" });
   } catch (err) {
-    console.error(err);
+    console.error("❌ Error deleting driver:", err);
     res.status(500).json({ error: "Failed to delete driver" });
   }
 };
+
 
 // ------------------- VEHICLES -------------------
 export const getAllVehicles = async (req, res) => {

@@ -3,7 +3,7 @@ import { pool } from "./db.js";
 
 const createUser = async () => {
   try {
-    const email = "jane.driver@camny.com"; // new user email
+    const email = "elie@gmail.com"; // new user email
     const role = "driver"; // role: driver or passenger
 
     // Check if user already exists
@@ -14,13 +14,13 @@ const createUser = async () => {
     }
 
     // Hash the password
-    const hashed = await bcrypt.hash("driver123", 10);
+    const hashed = await bcrypt.hash("pass", 10);
 
     // Insert user
     await pool.query(
       `INSERT INTO users (full_name, email, phone, password_hash, role)
        VALUES ($1,$2,$3,$4,$5)`,
-      ["Jane Driver", email, "1112223333", hashed, role]
+      ["elie", email, "11199999", hashed, role]
     );
 
     console.log("User created successfully");
