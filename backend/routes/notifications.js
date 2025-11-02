@@ -1,8 +1,13 @@
 import express from "express";
-import { getUserNotifications } from "../controllers/notificationController.js";
+import { getUserNotifications, sendNotification } from "../controllers/notificationController.js";
+import { authMiddleware, authorizeRole } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
 
-router.get("/:userId", getUserNotifications);
+// Get notifications for a user
+router.get("/:userId", authMiddleware, getUserNotifications);
+
+// Send notification (admin only)
+router.post("/", authMiddleware, authorizeRole("admin"), sendNotification);
 
 export default router;

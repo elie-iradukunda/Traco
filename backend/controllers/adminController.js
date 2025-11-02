@@ -67,19 +67,27 @@ export const getAllDrivers = async (req, res) => {
     const result = await pool.query(`
       SELECT 
         d.driver_id, 
+        d.user_id,
         u.full_name, 
         u.email, 
         u.phone, 
-        d.license_number, 
-        d.status
+        d.license_number,
+        d.status,
+        d.assigned_line_id,
+        v.plate_number,
+        v.vehicle_id,
+        r.route_id,
+        r.route_name
       FROM drivers d
       JOIN users u ON d.user_id = u.user_id
+      LEFT JOIN vehicles v ON v.assigned_driver = d.driver_id
+      LEFT JOIN routes r ON r.route_id = d.assigned_line_id
       ORDER BY d.driver_id ASC
     `);
     res.status(200).json(result.rows);
   } catch (err) {
     console.error("❌ Error fetching drivers:", err);
-    res.status(500).json({ error: "Failed to fetch drivers" });
+    res.status(500).json({ error: "Failed to fetch drivers", details: err.message });
   }
 };
 
@@ -88,57 +96,55 @@ export const getAllDrivers = async (req, res) => {
 
 export const addDriver = async (req, res) => {
   try {
-    const { full_name, email, phone, password, license_number, status } = req.body;
+    const { user_id, license_number, status } = req.body;
 
-    if (!full_name || !email || !phone || !password || !license_number) {
-      return res.status(400).json({ error: "Missing required fields" });
+    if (!user_id || !license_number) {
+      return res.status(400).json({ error: "user_id and license_number are required" });
     }
 
-    await pool.query("BEGIN"); // Start transaction
+    // Check if user exists and is not already a driver
+    const userCheck = await pool.query(
+      `SELECT u.user_id, u.full_name, u.email, u.phone, d.driver_id
+       FROM users u
+       LEFT JOIN drivers d ON u.user_id = d.user_id
+       WHERE u.user_id = $1`,
+      [user_id]
+    );
 
-    // 1️⃣ Add user with role = 'driver'
-    const userInsert = `
-      INSERT INTO users (full_name, email, phone, password, role)
-      VALUES ($1, $2, $3, $4, 'driver')
-      RETURNING user_id;
-    `;
-    const userResult = await pool.query(userInsert, [
-      full_name,
-      email,
-      phone,
-      password,
-    ]);
-    const user_id = userResult.rows[0].user_id;
+    if (!userCheck.rows.length) {
+      return res.status(404).json({ error: "User not found" });
+    }
 
-    // 2️⃣ Add linked driver record
-    const driverInsert = `
-      INSERT INTO drivers (user_id, license_number, status)
-      VALUES ($1, $2, $3)
-      RETURNING driver_id;
-    `;
-    const driverResult = await pool.query(driverInsert, [
-      user_id,
-      license_number,
-      status || "active",
-    ]);
+    if (userCheck.rows[0].driver_id) {
+      return res.status(400).json({ error: "User is already registered as a driver" });
+    }
 
-    await pool.query("COMMIT");
+    // Add linked driver record
+    const driverResult = await pool.query(
+      `INSERT INTO drivers (user_id, license_number, status)
+       VALUES ($1, $2, $3)
+       RETURNING driver_id, user_id, license_number, status`,
+      [user_id, license_number, status || "active"]
+    );
+
+    const driver = driverResult.rows[0];
+    const user = userCheck.rows[0];
 
     res.status(201).json({
       message: "Driver created successfully",
       driver: {
-        driver_id: driverResult.rows[0].driver_id,
-        full_name,
-        email,
-        phone,
-        license_number,
-        status: status || "active",
+        driver_id: driver.driver_id,
+        user_id: driver.user_id,
+        full_name: user.full_name,
+        email: user.email,
+        phone: user.phone,
+        license_number: driver.license_number,
+        status: driver.status,
       },
     });
   } catch (err) {
-    await pool.query("ROLLBACK");
     console.error("❌ Error creating driver:", err);
-    res.status(500).json({ error: "Failed to add driver" });
+    res.status(500).json({ error: "Failed to add driver", details: err.message });
   }
 };
 
@@ -148,23 +154,48 @@ export const updateDriver = async (req, res) => {
     const { id } = req.params;
     const { license_number, status } = req.body;
 
-    const result = await pool.query(
-      `UPDATE drivers 
-       SET license_number = COALESCE($1, license_number), 
-           status = COALESCE($2, status)
-       WHERE driver_id = $3
-       RETURNING *`,
-      [license_number, status, id]
-    );
+    // Build update query dynamically
+    const updates = [];
+    const values = [];
+    let paramCount = 1;
+
+    if (license_number !== undefined) {
+      updates.push(`license_number = $${paramCount++}`);
+      values.push(license_number);
+    }
+    if (status !== undefined) {
+      updates.push(`status = $${paramCount++}`);
+      values.push(status);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: "No fields to update" });
+    }
+
+    values.push(id);
+    const query = `UPDATE drivers SET ${updates.join(", ")} WHERE driver_id = $${paramCount} RETURNING *`;
+
+    const result = await pool.query(query, values);
 
     if (result.rowCount === 0) {
       return res.status(404).json({ error: "Driver not found" });
     }
 
-    res.status(200).json({ message: "Driver updated successfully", driver: result.rows[0] });
+    // Fetch updated driver with user info
+    const driverWithUser = await pool.query(`
+      SELECT d.*, u.full_name, u.email, u.phone
+      FROM drivers d
+      JOIN users u ON d.user_id = u.user_id
+      WHERE d.driver_id = $1
+    `, [id]);
+
+    res.status(200).json({ 
+      message: "Driver updated successfully", 
+      driver: driverWithUser.rows[0] 
+    });
   } catch (err) {
     console.error("❌ Error updating driver:", err);
-    res.status(500).json({ error: "Failed to update driver" });
+    res.status(500).json({ error: "Failed to update driver", details: err.message });
   }
 };
 
@@ -396,29 +427,69 @@ export const getAllRoutes = async (req, res) => {
 
 export const addRoute = async (req, res) => {
   try {
-    const { company_id, route_name, start_location, end_location, distance_km, fare_base, map_url } = req.body;
+    const { company_id, route_name, start_location, end_location, distance_km, fare_base, map_url, expected_start_time } = req.body;
     const result = await pool.query(
-      `INSERT INTO routes (company_id, route_name, start_location, end_location, distance_km, fare_base, map_url)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-      [company_id, route_name, start_location, end_location, distance_km, fare_base, map_url]
+      `INSERT INTO routes (company_id, route_name, start_location, end_location, distance_km, fare_base, map_url, expected_start_time)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [company_id, route_name, start_location, end_location, distance_km, fare_base, map_url, expected_start_time || null]
     );
     res.status(201).json(result.rows[0]);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to add route" });
+    res.status(500).json({ error: "Failed to add route", details: err.message });
   }
 };
 
 export const updateRoute = async (req, res) => {
   try {
     const { id } = req.params;
-    const { company_id, route_name, start_location, end_location, distance_km, fare_base, map_url } = req.body;
+    const { company_id, route_name, start_location, end_location, distance_km, fare_base, map_url, expected_start_time } = req.body;
+    
+    const updates = [];
+    const values = [];
+    let paramCount = 1;
 
-    const result = await pool.query(
-      `UPDATE routes SET company_id=$1, route_name=$2, start_location=$3, end_location=$4,
-       distance_km=$5, fare_base=$6, map_url=$7 WHERE route_id=$8 RETURNING *`,
-      [company_id, route_name, start_location, end_location, distance_km, fare_base, map_url, id]
-    );
+    if (company_id !== undefined) {
+      updates.push(`company_id = $${paramCount++}`);
+      values.push(company_id);
+    }
+    if (route_name !== undefined) {
+      updates.push(`route_name = $${paramCount++}`);
+      values.push(route_name);
+    }
+    if (start_location !== undefined) {
+      updates.push(`start_location = $${paramCount++}`);
+      values.push(start_location);
+    }
+    if (end_location !== undefined) {
+      updates.push(`end_location = $${paramCount++}`);
+      values.push(end_location);
+    }
+    if (distance_km !== undefined) {
+      updates.push(`distance_km = $${paramCount++}`);
+      values.push(distance_km);
+    }
+    if (fare_base !== undefined) {
+      updates.push(`fare_base = $${paramCount++}`);
+      values.push(fare_base);
+    }
+    if (map_url !== undefined) {
+      updates.push(`map_url = $${paramCount++}`);
+      values.push(map_url);
+    }
+    if (expected_start_time !== undefined) {
+      updates.push(`expected_start_time = $${paramCount++}`);
+      values.push(expected_start_time || null);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: "No fields to update" });
+    }
+
+    values.push(id);
+    const query = `UPDATE routes SET ${updates.join(", ")} WHERE route_id = $${paramCount} RETURNING *`;
+
+    const result = await pool.query(query, values);
 
     if (!result.rows.length) return res.status(404).json({ error: "Route not found" });
 
@@ -433,7 +504,7 @@ export const updateRoute = async (req, res) => {
     res.status(200).json(routeWithCompany.rows[0]);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to update route" });
+    res.status(500).json({ error: "Failed to update route", details: err.message });
   }
 };
 
@@ -526,28 +597,47 @@ export const assignDriverToRoute = async (req, res) => {
     );
     if (!driverCheck.rows.length) return res.status(404).json({ error: "Driver not found" });
 
-    // 2️⃣ Assign driver to the route
-    const result = await pool.query(
-      `UPDATE routes SET assigned_driver=$1 WHERE route_id=$2 RETURNING *`,
-      [driver_id, routeId]
+    // 2️⃣ Check if route exists
+    const routeCheck = await pool.query(
+      `SELECT route_id, route_name, start_location, end_location FROM routes WHERE route_id = $1`,
+      [routeId]
+    );
+    if (!routeCheck.rows.length) return res.status(404).json({ error: "Route not found" });
+
+    const route = routeCheck.rows[0];
+
+    // 3️⃣ Assign driver to the route (update drivers.assigned_line_id)
+    await pool.query(
+      `UPDATE drivers SET assigned_line_id=$1 WHERE driver_id=$2`,
+      [routeId, driver_id]
     );
 
-    // 3️⃣ Send notification to the driver
-    const driver = driverCheck.rows[0];
-    const route = result.rows[0];
+    // 3b️⃣ Also update the vehicle's assigned_route if the driver has a vehicle
     await pool.query(
-      `INSERT INTO notifications (user_id, message) VALUES ($1, $2)`,
+      `UPDATE vehicles SET assigned_route=$1 
+       WHERE assigned_driver=$2 AND status='active'`,
+      [routeId, driver_id]
+    );
+
+    // 4️⃣ Send notification to the driver
+    const driver = driverCheck.rows[0];
+    await pool.query(
+      `INSERT INTO notifications (user_id, message, title) VALUES ($1, $2, $3)`,
       [
         driver.user_id,
-        `You have been assigned to route: ${route.route_name} (${route.start_location} - ${route.end_location})`
+        `You have been assigned to route: ${route.route_name} (${route.start_location} - ${route.end_location})`,
+        "New Route Assignment"
       ]
     );
 
-    res.status(200).json({ message: "Driver assigned to route successfully", route: result.rows[0] });
+    res.status(200).json({ 
+      message: "Driver assigned to route successfully", 
+      route: route 
+    });
 
   } catch (err) {
     console.error("Error assigning driver to route:", err);
-    res.status(500).json({ error: "Failed to assign driver to route" });
+    res.status(500).json({ error: "Failed to assign driver to route", details: err.message });
   }
 };
 
@@ -555,47 +645,174 @@ export const assignDriverToRoute = async (req, res) => {
 // ------------------- TICKETS -------------------
 export const getAllTickets = async (req, res) => {
   try {
-    const result = await pool.query(`
-      SELECT t.ticket_id, u.full_name AS passenger_name, r.route_name, t.status, t.created_at
-      FROM tickets t
-      JOIN users u ON t.passenger_id = u.user_id
-      JOIN routes r ON t.route_id = r.route_id
-      ORDER BY t.ticket_id ASC
+    // First, check which columns exist in the tickets table
+    const columnCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'tickets'
     `);
+    
+    const existingColumns = columnCheck.rows.map(row => row.column_name);
+    const hasActualStart = existingColumns.includes('actual_start_location');
+    const hasActualEnd = existingColumns.includes('actual_end_location');
+    const hasCalculatedFare = existingColumns.includes('calculated_fare');
+    const hasBoardingStatus = existingColumns.includes('boarding_status');
+    const hasJourneyStatus = existingColumns.includes('journey_status');
+    
+    // Build SELECT clause dynamically based on existing columns
+    const selectFields = [
+      't.ticket_id',
+      'COALESCE(t.passenger_name, u.full_name) AS passenger_name',
+      't.passenger_phone',
+      't.passenger_email',
+      'r.route_name',
+      hasActualStart ? 't.actual_start_location' : 'NULL AS actual_start_location',
+      hasActualEnd ? 't.actual_end_location' : 'NULL AS actual_end_location',
+      't.payment_status',
+      hasBoardingStatus ? 't.boarding_status' : "NULL AS boarding_status",
+      hasJourneyStatus ? 't.journey_status' : 'NULL AS journey_status',
+      't.amount_paid',
+      hasCalculatedFare ? 't.calculated_fare' : 't.amount_paid AS calculated_fare',
+      't.created_at',
+      'v.plate_number AS vehicle_plate',
+      'v.vehicle_id',
+      'd.driver_id',
+      'u2.full_name AS driver_name'
+    ];
+    
+    const result = await pool.query(`
+      SELECT 
+        ${selectFields.join(',\n        ')}
+      FROM tickets t
+      LEFT JOIN users u ON t.passenger_id = u.user_id
+      JOIN routes r ON t.route_id = r.route_id
+      LEFT JOIN vehicles v ON t.vehicle_id = v.vehicle_id
+      LEFT JOIN drivers d ON v.assigned_driver = d.driver_id
+      LEFT JOIN users u2 ON d.user_id = u2.user_id
+      ORDER BY t.ticket_id DESC
+    `);
+    
     res.status(200).json(result.rows);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch tickets" });
+    console.error("Error fetching tickets:", err);
+    res.status(500).json({ error: "Failed to fetch tickets", details: err.message });
   }
 };
 
 export const addTicket = async (req, res) => {
   try {
-    const { passenger_id, route_id, status } = req.body;
-    const result = await pool.query(
-      `INSERT INTO tickets (passenger_id, route_id, status) VALUES ($1,$2,$3) RETURNING *`,
-      [passenger_id, route_id, status]
+    const { passenger_id, route_id, vehicle_id, seat_number, travel_date } = req.body;
+
+    if (!passenger_id || !route_id) {
+      return res.status(400).json({ error: "passenger_id and route_id are required" });
+    }
+
+    // Validate passenger exists
+    const passengerCheck = await pool.query(
+      `SELECT user_id FROM users WHERE user_id = $1`,
+      [passenger_id]
     );
+    if (!passengerCheck.rows.length) {
+      return res.status(404).json({ error: "Passenger not found" });
+    }
+
+    // Validate route exists
+    const routeCheck = await pool.query(
+      `SELECT route_id FROM routes WHERE route_id = $1`,
+      [route_id]
+    );
+    if (!routeCheck.rows.length) {
+      return res.status(404).json({ error: "Route not found" });
+    }
+
+    // If vehicle_id provided, validate it exists
+    if (vehicle_id) {
+      const vehicleCheck = await pool.query(
+        `SELECT vehicle_id FROM vehicles WHERE vehicle_id = $1`,
+        [vehicle_id]
+      );
+      if (!vehicleCheck.rows.length) {
+        return res.status(404).json({ error: "Vehicle not found" });
+      }
+    }
+
+    const result = await pool.query(
+      `INSERT INTO tickets (passenger_id, route_id, vehicle_id, seat_number, travel_date)
+       VALUES ($1, $2, $3, $4, $5) 
+       RETURNING *`,
+      [passenger_id, route_id, vehicle_id || null, seat_number || null, travel_date || null]
+    );
+
     res.status(201).json(result.rows[0]);
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to add ticket" });
+    console.error("Error adding ticket:", err);
+    res.status(500).json({ error: "Failed to add ticket", details: err.message });
   }
 };
 
 export const updateTicket = async (req, res) => {
   try {
     const { id } = req.params;
-    const { status } = req.body;
-    const result = await pool.query(
-      `UPDATE tickets SET status=$1 WHERE ticket_id=$2 RETURNING *`,
-      [status, id]
-    );
-    if (!result.rowCount) return res.status(404).json({ error: "Ticket not found" });
-    res.status(200).json(result.rows[0]);
+    const { vehicle_id, seat_number, travel_date, payment_status } = req.body;
+
+    // Build update query dynamically
+    const updates = [];
+    const values = [];
+    let paramCount = 1;
+
+    if (payment_status !== undefined) {
+      updates.push(`payment_status = $${paramCount++}`);
+      values.push(payment_status);
+    }
+    if (vehicle_id !== undefined) {
+      updates.push(`vehicle_id = $${paramCount++}`);
+      values.push(vehicle_id || null);
+    }
+    if (seat_number !== undefined) {
+      updates.push(`seat_number = $${paramCount++}`);
+      values.push(seat_number || null);
+    }
+    if (travel_date !== undefined) {
+      updates.push(`travel_date = $${paramCount++}`);
+      values.push(travel_date || null);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: "No fields to update" });
+    }
+
+    values.push(id);
+    const query = `UPDATE tickets SET ${updates.join(", ")} WHERE ticket_id = $${paramCount} RETURNING *`;
+
+    const result = await pool.query(query, values);
+
+    if (!result.rowCount) {
+      return res.status(404).json({ error: "Ticket not found" });
+    }
+
+    // Get updated ticket with related data
+    const ticketWithDetails = await pool.query(`
+      SELECT 
+        t.*,
+        r.route_name,
+        r.start_location,
+        r.end_location,
+        v.plate_number,
+        u.full_name AS passenger_name
+      FROM tickets t
+      LEFT JOIN routes r ON t.route_id = r.route_id
+      LEFT JOIN vehicles v ON t.vehicle_id = v.vehicle_id
+      LEFT JOIN users u ON t.passenger_id = u.user_id
+      WHERE t.ticket_id = $1
+    `, [id]);
+
+    res.status(200).json({
+      message: "Ticket updated successfully",
+      ticket: ticketWithDetails.rows[0]
+    });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to update ticket" });
+    console.error("Error updating ticket:", err);
+    res.status(500).json({ error: "Failed to update ticket", details: err.message });
   }
 };
 

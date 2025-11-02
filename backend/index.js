@@ -8,7 +8,8 @@ import driverRoutes from "./routes/driver.js";
 import passengerRoutes from "./routes/passenger.js";
 import publicRoutes from "./routes/public.js";
 import notificationRoutes from "./routes/notifications.js";
-import authRoutes from "./routes/authRoutes.js"; // <-- import authRoutes
+import authRoutes from "./routes/authRoutes.js";
+import routeStopsRoutes from "./routes/routeStops.js";
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ app.use("/driver", driverRoutes);
 app.use("/passenger", passengerRoutes);
 app.use("/public", publicRoutes);
 app.use("/notifications", notificationRoutes);
+app.use("/api", routeStopsRoutes);
 
 // ------------------- DEFAULT ROUTE -------------------
 app.get("/", (req, res) => res.send("Backend running"));

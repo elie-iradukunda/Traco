@@ -1,11 +1,11 @@
 import express from "express";
 import {
   getAllDrivers,
-  addDriver,          // fixed: matches controller
+  addDriver,
   updateDriver,
   deleteDriver,
   getAllVehicles,
-  addVehicle,         // fixed: matches controller
+  addVehicle,
   updateVehicle,
   deleteVehicle,
   assignDriverToVehicle,
@@ -18,25 +18,27 @@ import {
   getCompanies,
   getAllUsers,
   getAllTickets,
+  addTicket,
+  updateTicket,
+  deleteTicket,
   getStats,
   registerDriverUser
 } from "../controllers/adminController.js";
 
 import { authMiddleware, authorizeRole } from "../middleware/authMiddleware.js";
+import {
+  getAllPassengersWithTickets,
+  getDriverAssignments as getAdminDriverAssignments
+} from "../controllers/journeyController.js";
 
 const router = express.Router();
 
 // ------------------- DRIVERS -------------------
-// Admin-only
+// Admin-only routes
 router.get("/drivers", authMiddleware, authorizeRole("admin"), getAllDrivers);
-router.post("/drivers", authMiddleware, authorizeRole("admin"), addDriver); // admin creates driver
+router.post("/drivers", authMiddleware, authorizeRole("admin"), addDriver);
 router.put("/drivers/:id", authMiddleware, authorizeRole("admin"), updateDriver);
 router.delete("/drivers/:id", authMiddleware, authorizeRole("admin"), deleteDriver);
-router.get("/drivers", getAllDrivers);
-router.post("/drivers", addDriver);
-router.put("/drivers/:id", updateDriver);
-router.delete("/drivers/:id", deleteDriver);
-
 router.post("/drivers/register", registerDriverUser);
 
 
@@ -82,8 +84,15 @@ router.get("/users", authMiddleware, authorizeRole("admin"), getAllUsers);
 
 // ------------------- TICKETS -------------------
 router.get("/tickets", authMiddleware, authorizeRole("admin"), getAllTickets);
+router.post("/tickets", authMiddleware, authorizeRole("admin"), addTicket);
+router.put("/tickets/:id", authMiddleware, authorizeRole("admin"), updateTicket);
+router.delete("/tickets/:id", authMiddleware, authorizeRole("admin"), deleteTicket);
 
 // ------------------- REPORTS / STATS -------------------
 router.get("/stats", authMiddleware, authorizeRole("admin"), getStats);
+
+// ------------------- PASSENGERS & DRIVER ASSIGNMENTS -------------------
+router.get("/passengers", authMiddleware, authorizeRole("admin"), getAllPassengersWithTickets);
+router.get("/driver-assignments", authMiddleware, authorizeRole("admin"), getAdminDriverAssignments);
 
 export default router;
