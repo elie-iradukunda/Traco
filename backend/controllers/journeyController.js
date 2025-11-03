@@ -495,11 +495,15 @@ export const confirmBoarding = async (req, res) => {
 // Update journey location
 export const updateLocation = async (req, res) => {
   try {
-    const { vehicle_id, current_location, latitude, longitude, estimated_arrival } = req.body;
+    const { vehicle_id, current_location, latitude, longitude, speed, heading, estimated_arrival } = req.body;
     const driverId = req.user ? await getDriverIdFromUserId(req.user.user_id) : null;
 
-    if (!vehicle_id || !current_location) {
-      return res.status(400).json({ error: "Vehicle ID and current location are required" });
+    if (!vehicle_id) {
+      return res.status(400).json({ error: "Vehicle ID is required" });
+    }
+
+    if (!current_location && (!latitude || !longitude)) {
+      return res.status(400).json({ error: "Either current location or GPS coordinates (latitude & longitude) are required" });
     }
 
     // Verify driver owns this vehicle
@@ -512,6 +516,62 @@ export const updateLocation = async (req, res) => {
       if (!vehicleCheck.rows.length) {
         return res.status(403).json({ error: "You are not assigned to this vehicle" });
       }
+    }
+
+    const tableCheck = await pool.query(`
+      SELECT table_name 
+      FROM information_schema.tables 
+      WHERE table_name IN ('vehicle_tracking', 'vehicle_location_live')
+    `);
+    
+    const tables = tableCheck.rows.map(row => row.table_name);
+    const hasTrackingTable = tables.includes('vehicle_tracking');
+    const hasLiveTable = tables.includes('vehicle_location_live');
+
+    if (hasTrackingTable) {
+      await pool.query(`
+        INSERT INTO vehicle_tracking (
+          vehicle_id, driver_id, current_location, latitude, longitude, 
+          speed, heading, estimated_arrival
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `, [
+        vehicle_id, 
+        driverId, 
+        current_location || `${latitude}, ${longitude}`, 
+        latitude || null, 
+        longitude || null, 
+        speed || null, 
+        heading || null, 
+        estimated_arrival || null
+      ]);
+    }
+
+    if (hasLiveTable) {
+      await pool.query(`
+        INSERT INTO vehicle_location_live (
+          vehicle_id, driver_id, current_location, latitude, longitude, 
+          speed, heading, estimated_arrival, last_updated
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP)
+        ON CONFLICT (vehicle_id) 
+        DO UPDATE SET 
+          driver_id = $2,
+          current_location = $3,
+          latitude = $4,
+          longitude = $5,
+          speed = $6,
+          heading = $7,
+          estimated_arrival = $8,
+          last_updated = CURRENT_TIMESTAMP
+      `, [
+        vehicle_id, 
+        driverId, 
+        current_location || `${latitude}, ${longitude}`, 
+        latitude || null, 
+        longitude || null, 
+        speed || null, 
+        heading || null, 
+        estimated_arrival || null
+      ]);
     }
 
     // Get ALL passengers for this vehicle (not just in_progress) - notify everyone with tickets

@@ -10,6 +10,7 @@ import publicRoutes from "./routes/public.js";
 import notificationRoutes from "./routes/notifications.js";
 import authRoutes from "./routes/authRoutes.js";
 import routeStopsRoutes from "./routes/routeStops.js";
+import trackingRoutes from "./routes/tracking.js";
 
 dotenv.config();
 
@@ -28,6 +29,7 @@ app.use("/passenger", passengerRoutes);
 app.use("/public", publicRoutes);
 app.use("/notifications", notificationRoutes);
 app.use("/api", routeStopsRoutes);
+app.use("/api/tracking", trackingRoutes);
 
 // ------------------- DEFAULT ROUTE -------------------
 app.get("/", (req, res) => res.send("Backend running"));
