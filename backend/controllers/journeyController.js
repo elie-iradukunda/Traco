@@ -1,10 +1,11 @@
 import { pool } from "../db.js";
-import crypto from "crypto";
 
-// Generate QR code for ticket
-const generateQRCode = (ticketId, vehicleId, routeId) => {
-  const data = `${ticketId}-${vehicleId}-${routeId}-${Date.now()}`;
-  return crypto.createHash('sha256').update(data).digest('hex').substring(0, 32).toUpperCase();
+const getDriverIdFromUserId = async (userId) => {
+  const result = await pool.query(
+    `SELECT driver_id FROM drivers WHERE user_id = $1 LIMIT 1`,
+    [userId]
+  );
+  return result.rows.length > 0 ? result.rows[0].driver_id : null;
 };
 
 // Get all passengers with tickets (for admin)
@@ -13,22 +14,21 @@ export const getAllPassengersWithTickets = async (req, res) => {
     const result = await pool.query(`
       SELECT DISTINCT
         t.passenger_id,
-        u.user_id,
         COALESCE(t.passenger_name, u.full_name) AS passenger_name,
         COALESCE(t.passenger_phone, u.phone) AS passenger_phone,
         COALESCE(t.passenger_email, u.email) AS passenger_email,
         COUNT(t.ticket_id) AS total_tickets,
-        SUM(t.amount_paid) AS total_spent,
-        MAX(t.created_at) AS last_booking_date
+        SUM(CASE WHEN t.payment_status = 'completed' THEN 1 ELSE 0 END) AS completed_tickets,
+        SUM(t.amount_paid) AS total_spent
       FROM tickets t
       LEFT JOIN users u ON t.passenger_id = u.user_id
-      GROUP BY t.passenger_id, u.user_id, t.passenger_name, u.full_name, t.passenger_phone, u.phone, t.passenger_email, u.email
-      ORDER BY last_booking_date DESC
+      GROUP BY t.passenger_id, t.passenger_name, u.full_name, t.passenger_phone, u.phone, t.passenger_email, u.email
+      ORDER BY total_tickets DESC
     `);
-    res.status(200).json(result.rows);
+    res.json(result.rows);
   } catch (err) {
     console.error("Error fetching passengers:", err);
-    res.status(500).json({ error: "Failed to fetch passengers", details: err.message });
+    res.status(500).json({ error: "Database error", details: err.message });
   }
 };
 
@@ -140,32 +140,39 @@ export const getDriverAssignments = async (req, res) => {
     // Combine assignments with passenger counts
     const assignments = assignmentsResult.rows.map(assignment => ({
       ...assignment,
-      total_passengers: passengerCountMap[assignment.vehicle_id] || 0
+      passenger_count: passengerCountMap[assignment.vehicle_id] || 0
     }));
 
-    res.status(200).json(assignments);
+    res.json(assignments);
   } catch (err) {
     console.error("Error fetching driver assignments:", err);
-    res.status(500).json({ error: "Failed to fetch driver assignments", details: err.message });
+    res.status(500).json({ error: "Database error", details: err.message });
   }
-};
-
-// Helper function to get driver_id from user_id
-const getDriverIdFromUserId = async (userId) => {
-  const result = await pool.query(
-    `SELECT driver_id FROM drivers WHERE user_id = $1`,
-    [userId]
-  );
-  return result.rows.length > 0 ? result.rows[0].driver_id : null;
 };
 
 // Get passengers for driver's vehicle
 export const getVehiclePassengers = async (req, res) => {
   try {
-    const driverId = req.params.driverId || (req.user ? await getDriverIdFromUserId(req.user.user_id) : null);
+    let driverId = req.params.driverId;
+    
+    // If no driverId in params, try to get from user token
+    if (!driverId && req.user) {
+      driverId = await getDriverIdFromUserId(req.user.user_id);
+    }
+    
+    // If still no driverId, check if driverId param might be a user_id
+    if (!driverId && req.params.driverId) {
+      const driverCheck = await pool.query(
+        `SELECT driver_id FROM drivers WHERE user_id = $1 OR driver_id = $1 LIMIT 1`,
+        [req.params.driverId]
+      );
+      if (driverCheck.rows.length > 0) {
+        driverId = driverCheck.rows[0].driver_id;
+      }
+    }
     
     if (!driverId) {
-      return res.status(400).json({ error: "Driver ID required" });
+      return res.status(400).json({ error: "Driver ID required. Please ensure you are logged in as a driver." });
     }
 
     // Get driver's vehicle
@@ -182,40 +189,86 @@ export const getVehiclePassengers = async (req, res) => {
 
     const vehicle = vehicleResult.rows[0];
 
-    // Get passengers with tickets for this vehicle
+    // Check which columns exist in tickets table
+    const ticketColumnCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'tickets'
+    `);
+    const ticketColumns = ticketColumnCheck.rows.map(row => row.column_name);
+    const hasQRCode = ticketColumns.includes('qr_code');
+    const hasPassengerName = ticketColumns.includes('passenger_name');
+    const hasPassengerPhone = ticketColumns.includes('passenger_phone');
+    const hasPassengerEmail = ticketColumns.includes('passenger_email');
+    const hasBoardingStatus = ticketColumns.includes('boarding_status');
+    const hasJourneyStatus = ticketColumns.includes('journey_status');
+    const hasBoardingConfirmedAt = ticketColumns.includes('boarding_confirmed_at');
+    const hasActualStartLocation = ticketColumns.includes('actual_start_location');
+    const hasActualEndLocation = ticketColumns.includes('actual_end_location');
+
+    // Check which columns exist in routes table
+    const routeColumnCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'routes'
+    `);
+    const routeColumns = routeColumnCheck.rows.map(row => row.column_name);
+    const hasExpectedStartTime = routeColumns.includes('expected_start_time');
+
+    // Build SELECT clause dynamically
+    const passengerSelectFields = [
+      't.ticket_id',
+      hasQRCode ? 't.qr_code' : 'NULL AS qr_code',
+      hasPassengerName ? 't.passenger_name' : 'NULL AS passenger_name',
+      hasPassengerPhone ? 't.passenger_phone' : 'NULL AS passenger_phone',
+      hasPassengerEmail ? 't.passenger_email' : 'NULL AS passenger_email',
+      't.seat_number',
+      't.travel_date',
+      't.payment_status',
+      hasBoardingStatus ? 't.boarding_status' : "NULL AS boarding_status",
+      hasJourneyStatus ? 't.journey_status' : 'NULL AS journey_status',
+      hasBoardingConfirmedAt ? 't.boarding_confirmed_at' : 'NULL AS boarding_confirmed_at',
+      hasActualStartLocation ? 't.actual_start_location' : 'NULL AS actual_start_location',
+      hasActualEndLocation ? 't.actual_end_location' : 'NULL AS actual_end_location',
+      'r.route_name',
+      'r.start_location',
+      'r.end_location',
+      hasExpectedStartTime ? 'r.expected_start_time' : 'NULL AS expected_start_time',
+      'u.user_id',
+      'u.full_name AS buyer_name'
+    ];
+
+    // Get passengers with tickets for this vehicle (all completed tickets, not just today)
     const passengersResult = await pool.query(`
       SELECT 
-        t.ticket_id,
-        t.qr_code,
-        t.passenger_name,
-        t.passenger_phone,
-        t.passenger_email,
-        t.seat_number,
-        t.travel_date,
-        t.payment_status,
-        t.boarding_status,
-        t.journey_status,
-        t.boarding_confirmed_at,
-        t.actual_start_location,
-        t.actual_end_location,
-        r.route_name,
-        r.start_location,
-        r.end_location,
-        r.expected_start_time,
-        u.user_id,
-        u.full_name AS buyer_name
+        ${passengerSelectFields.join(',\n        ')}
       FROM tickets t
       JOIN routes r ON t.route_id = r.route_id
       LEFT JOIN users u ON t.passenger_id = u.user_id
       WHERE t.vehicle_id = $1 
         AND t.payment_status = 'completed'
-        AND (t.travel_date IS NULL OR t.travel_date::date = CURRENT_DATE)
       ORDER BY t.created_at ASC
     `, [vehicle.vehicle_id]);
 
+    // Check if journey is already started (check if any ticket has journey_status = 'in_progress')
+    let isJourneyInProgress = false;
+    if (hasJourneyStatus) {
+      const journeyCheck = await pool.query(`
+        SELECT COUNT(*) as count
+        FROM tickets
+        WHERE vehicle_id = $1 
+          AND payment_status = 'completed'
+          AND journey_status = 'in_progress'
+        LIMIT 1
+      `, [vehicle.vehicle_id]);
+      
+      isJourneyInProgress = parseInt(journeyCheck.rows[0]?.count || 0) > 0;
+    }
+
     res.status(200).json({
       vehicle: vehicle,
-      passengers: passengersResult.rows
+      passengers: passengersResult.rows,
+      journey_in_progress: isJourneyInProgress
     });
   } catch (err) {
     console.error("Error fetching vehicle passengers:", err);
@@ -248,21 +301,63 @@ export const scanTicket = async (req, res) => {
       }
     }
 
+    // Check which columns exist in tickets table
+    const ticketColumnCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'tickets'
+    `);
+    const ticketColumns = ticketColumnCheck.rows.map(row => row.column_name);
+    const hasQRCode = ticketColumns.includes('qr_code');
+    const hasPassengerName = ticketColumns.includes('passenger_name');
+    const hasPassengerPhone = ticketColumns.includes('passenger_phone');
+    const hasPassengerEmail = ticketColumns.includes('passenger_email');
+    const hasBoardingStatus = ticketColumns.includes('boarding_status');
+    const hasJourneyStatus = ticketColumns.includes('journey_status');
+    const hasActualStartLocation = ticketColumns.includes('actual_start_location');
+    const hasActualEndLocation = ticketColumns.includes('actual_end_location');
+
+    // Build WHERE clause - check if qr_code column exists
+    let whereClause = "WHERE t.payment_status = 'completed'";
+    if (!hasQRCode) {
+      return res.status(400).json({ error: "QR code feature not available - database migration required" });
+    }
+    whereClause += " AND t.qr_code = $1";
+
+    // Build SELECT clause dynamically
+    const ticketSelectFields = [
+      't.ticket_id',
+      't.passenger_id',
+      't.route_id',
+      't.vehicle_id',
+      't.seat_number',
+      't.travel_date',
+      't.payment_status',
+      't.amount_paid',
+      't.created_at',
+      hasQRCode ? 't.qr_code' : 'NULL AS qr_code',
+      hasPassengerName ? 't.passenger_name' : 'NULL AS passenger_name',
+      hasPassengerPhone ? 't.passenger_phone' : 'NULL AS passenger_phone',
+      hasPassengerEmail ? 't.passenger_email' : 'NULL AS passenger_email',
+      hasBoardingStatus ? 't.boarding_status' : "NULL AS boarding_status",
+      hasJourneyStatus ? 't.journey_status' : 'NULL AS journey_status',
+      hasActualStartLocation ? 't.actual_start_location' : 'NULL AS actual_start_location',
+      hasActualEndLocation ? 't.actual_end_location' : 'NULL AS actual_end_location',
+      'r.route_name',
+      'r.start_location',
+      'r.end_location',
+      'v.plate_number',
+      'v.vehicle_id AS ticket_vehicle_id'
+    ];
+
     // Find ticket by QR code
     const ticketResult = await pool.query(`
       SELECT 
-        t.*,
-        r.route_name,
-        r.start_location,
-        r.end_location,
-        t.actual_start_location,
-        t.actual_end_location,
-        v.plate_number,
-        v.vehicle_id AS ticket_vehicle_id
+        ${ticketSelectFields.join(',\n        ')}
       FROM tickets t
       JOIN routes r ON t.route_id = r.route_id
       LEFT JOIN vehicles v ON t.vehicle_id = v.vehicle_id
-      WHERE t.qr_code = $1 AND t.payment_status = 'completed'
+      ${whereClause}
     `, [qr_code]);
 
     if (!ticketResult.rows.length) {
@@ -272,23 +367,13 @@ export const scanTicket = async (req, res) => {
     const ticket = ticketResult.rows[0];
 
     // Verify ticket is for this vehicle
-    if (ticket.vehicle_id !== parseInt(vehicle_id)) {
-      return res.status(400).json({ 
-        error: "Ticket not valid for this vehicle",
-        ticket_vehicle: ticket.plate_number || ticket.ticket_vehicle_id
-      });
+    if (ticket.vehicle_id != vehicle_id) {
+      return res.status(403).json({ error: "This ticket is not for your vehicle" });
     }
 
     res.status(200).json({
       valid: true,
-      ticket: {
-        ticket_id: ticket.ticket_id,
-        passenger_name: ticket.passenger_name,
-        passenger_phone: ticket.passenger_phone,
-        seat_number: ticket.seat_number,
-        route_name: ticket.route_name,
-        boarding_status: ticket.boarding_status || "pending"
-      }
+      ticket: ticket
     });
   } catch (err) {
     console.error("Error scanning ticket:", err);
@@ -305,15 +390,40 @@ export const confirmBoarding = async (req, res) => {
       return res.status(400).json({ error: "Ticket ID is required" });
     }
 
+    // Check which columns exist in tickets table
+    const ticketColumnCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'tickets'
+    `);
+    const ticketColumns = ticketColumnCheck.rows.map(row => row.column_name);
+    const hasBoardingStatus = ticketColumns.includes('boarding_status');
+    const hasJourneyStatus = ticketColumns.includes('journey_status');
+    const hasBoardingConfirmedAt = ticketColumns.includes('boarding_confirmed_at');
+
+    // Build UPDATE clause dynamically
+    const updateFields = [];
+    if (hasBoardingStatus) {
+      updateFields.push("boarding_status = 'confirmed'");
+    }
+    if (hasBoardingConfirmedAt) {
+      updateFields.push("boarding_confirmed_at = CURRENT_TIMESTAMP");
+    }
+    if (hasJourneyStatus) {
+      updateFields.push("journey_status = 'in_progress'");
+    }
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({ error: "Boarding status tracking not available - migration required" });
+    }
+
     // Update ticket boarding status
     const updateResult = await pool.query(`
       UPDATE tickets 
-      SET boarding_status = $1,
-          boarding_confirmed_at = CURRENT_TIMESTAMP,
-          journey_status = $2
-      WHERE ticket_id = $3
+      SET ${updateFields.join(',\n          ')}
+      WHERE ticket_id = $1
       RETURNING *
-    `, ["confirmed", "in_progress", ticket_id]);
+    `, [ticket_id]);
 
     if (!updateResult.rows.length) {
       return res.status(404).json({ error: "Ticket not found" });
@@ -404,25 +514,27 @@ export const updateLocation = async (req, res) => {
       }
     }
 
-    // Get all passengers for this vehicle
+    // Get ALL passengers for this vehicle (not just in_progress) - notify everyone with tickets
+    // Include all passenger identification fields
     const passengersResult = await pool.query(`
       SELECT DISTINCT
         t.passenger_id,
-        t.passenger_phone,
-        t.passenger_email,
-        u.user_id
+        COALESCE(t.passenger_phone, u.phone) AS passenger_phone,
+        COALESCE(t.passenger_email, u.email) AS passenger_email,
+        u.user_id,
+        u.phone AS user_phone,
+        u.email AS user_email
       FROM tickets t
       LEFT JOIN users u ON t.passenger_id = u.user_id
       WHERE t.vehicle_id = $1 
         AND t.payment_status = 'completed'
-        AND t.journey_status = 'in_progress'
     `, [vehicle_id]);
 
     // Create notification for all passengers
     const notificationPromises = passengersResult.rows.map(async (passenger) => {
       let targetUserId = passenger.user_id || passenger.passenger_id;
       
-      // Find user by phone if user_id not available
+      // If no user_id, try to find user by phone
       if (!targetUserId && passenger.passenger_phone) {
         const phoneUser = await pool.query(
           `SELECT user_id FROM users WHERE phone = $1 LIMIT 1`,
@@ -432,7 +544,19 @@ export const updateLocation = async (req, res) => {
           targetUserId = phoneUser.rows[0].user_id;
         }
       }
+      
+      // If still no user_id, try to find user by email
+      if (!targetUserId && passenger.passenger_email) {
+        const emailUser = await pool.query(
+          `SELECT user_id FROM users WHERE email = $1 LIMIT 1`,
+          [passenger.passenger_email]
+        ).catch(() => ({ rows: [] }));
+        if (emailUser.rows.length > 0) {
+          targetUserId = emailUser.rows[0].user_id;
+        }
+      }
 
+      // Send notification if we found a user
       if (targetUserId) {
         return pool.query(
           `INSERT INTO notifications (user_id, message, title)
@@ -442,12 +566,25 @@ export const updateLocation = async (req, res) => {
             `Location update: Currently at ${current_location}. ${estimated_arrival ? `ETA: ${estimated_arrival}` : ''}`,
             "Journey Update"
           ]
-        ).catch(() => null); // Ignore errors for users not found
+        ).catch((err) => {
+          console.error(`Failed to notify user ${targetUserId}:`, err.message);
+          return null; // Ignore errors for individual users
+        });
       }
+      
+      // Log if we couldn't find a user for this passenger
+      if (!targetUserId) {
+        console.log(`Could not find user for passenger: phone=${passenger.passenger_phone}, email=${passenger.passenger_email}`);
+      }
+      
       return Promise.resolve();
     });
 
     await Promise.all(notificationPromises);
+    
+    // Log how many passengers were notified
+    const notifiedCount = passengersResult.rows.filter(p => p.user_id || p.passenger_id).length;
+    console.log(`Location update: Notified ${notifiedCount} passengers out of ${passengersResult.rows.length} total`);
 
     // Store location update (you might want a vehicle_tracking table)
     const timestamp = new Date().toISOString();
@@ -485,26 +622,82 @@ export const startJourney = async (req, res) => {
       }
     }
 
+    // Check which columns exist in tickets table
+    const ticketColumnCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'tickets'
+    `);
+    const ticketColumns = ticketColumnCheck.rows.map(row => row.column_name);
+    const hasJourneyStatus = ticketColumns.includes('journey_status');
+    const hasBoardingConfirmedAt = ticketColumns.includes('boarding_confirmed_at');
+    const hasBoardingStatus = ticketColumns.includes('boarding_status');
+
+    // Build UPDATE clause dynamically
+    const updateFields = [];
+    if (hasJourneyStatus) {
+      updateFields.push("journey_status = 'in_progress'");
+    }
+    if (hasBoardingConfirmedAt) {
+      updateFields.push("boarding_confirmed_at = CURRENT_TIMESTAMP");
+    }
+    if (hasBoardingStatus) {
+      updateFields.push("boarding_status = 'confirmed'");
+    }
+
+    if (updateFields.length === 0) {
+      // No updatable columns exist - just verify tickets exist
+      const ticketCheck = await pool.query(`
+        SELECT ticket_id
+        FROM tickets
+        WHERE vehicle_id = $1 
+          AND payment_status = 'completed'
+        LIMIT 1
+      `, [vehicle_id]);
+      
+      if (!ticketCheck.rows.length) {
+        return res.status(404).json({ error: "No tickets found for this vehicle" });
+      }
+      
+      // Return success even though we can't update (columns don't exist)
+      return res.status(200).json({ 
+        message: "Journey started (note: status tracking columns not available - migration required)",
+        tickets_updated: ticketCheck.rows.length
+      });
+    }
+
+    // Build WHERE clause
+    let whereClause = "WHERE vehicle_id = $1 AND payment_status = 'completed'";
+    if (hasJourneyStatus) {
+      whereClause += " AND (journey_status IS NULL OR journey_status = 'pending')";
+    }
+
     // Update all tickets for this vehicle to in_progress
     const updateResult = await pool.query(`
       UPDATE tickets
-      SET journey_status = 'in_progress',
-          boarding_confirmed_at = CURRENT_TIMESTAMP
-      WHERE vehicle_id = $1 
-        AND payment_status = 'completed'
-        AND (journey_status IS NULL OR journey_status = 'pending')
+      SET ${updateFields.join(', ')}
+      ${whereClause}
       RETURNING ticket_id
     `, [vehicle_id]);
+
+    // Check which passenger columns exist (already checked above, reuse the variables)
+    const hasPassengerPhoneForNotify = ticketColumns.includes('passenger_phone');
+    const hasPassengerEmailForNotify = ticketColumns.includes('passenger_email');
+
+    // Build SELECT clause for passenger notification
+    const passengerNotifyFields = [
+      't.passenger_id',
+      hasPassengerPhoneForNotify ? 't.passenger_phone' : 'u.phone AS passenger_phone',
+      hasPassengerEmailForNotify ? 't.passenger_email' : 'u.email AS passenger_email',
+      'u.user_id',
+      'r.route_name',
+      'v.plate_number'
+    ];
 
     // Notify all passengers
     const passengersResult = await pool.query(`
       SELECT DISTINCT
-        t.passenger_id,
-        t.passenger_phone,
-        t.passenger_email,
-        u.user_id,
-        r.route_name,
-        v.plate_number
+        ${passengerNotifyFields.join(',\n        ')}
       FROM tickets t
       LEFT JOIN users u ON t.passenger_id = u.user_id
       JOIN routes r ON t.route_id = r.route_id
@@ -540,36 +733,108 @@ export const startJourney = async (req, res) => {
   }
 };
 
-// Add QR code to existing tickets (migration helper)
-export const addQRCodeToTicket = async (req, res) => {
+// Stop/End journey
+export const stopJourney = async (req, res) => {
   try {
-    const { ticket_id } = req.params;
-    
-    const ticketResult = await pool.query(
-      `SELECT ticket_id, vehicle_id, route_id FROM tickets WHERE ticket_id = $1`,
-      [ticket_id]
-    );
+    const { vehicle_id } = req.body;
+    const driverId = req.user ? await getDriverIdFromUserId(req.user.user_id) : null;
 
-    if (!ticketResult.rows.length) {
-      return res.status(404).json({ error: "Ticket not found" });
+    if (!vehicle_id) {
+      return res.status(400).json({ error: "Vehicle ID is required" });
     }
 
-    const ticket = ticketResult.rows[0];
-    const qr_code = generateQRCode(ticket.ticket_id, ticket.vehicle_id || 0, ticket.route_id);
+    if (driverId) {
+      const vehicleCheck = await pool.query(
+        `SELECT vehicle_id FROM vehicles WHERE vehicle_id = $1 AND assigned_driver = $2`,
+        [vehicle_id, driverId]
+      );
 
-    await pool.query(
-      `UPDATE tickets SET qr_code = $1 WHERE ticket_id = $2`,
-      [qr_code, ticket_id]
-    );
+      if (!vehicleCheck.rows.length) {
+        return res.status(403).json({ error: "You are not assigned to this vehicle" });
+      }
+    }
+
+    // Check which columns exist in tickets table
+    const ticketColumnCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'tickets'
+    `);
+    const ticketColumns = ticketColumnCheck.rows.map(row => row.column_name);
+    const hasJourneyStatus = ticketColumns.includes('journey_status');
+
+    // Update all tickets for this vehicle to completed
+    let updateResult;
+    if (hasJourneyStatus) {
+      updateResult = await pool.query(`
+        UPDATE tickets
+        SET journey_status = 'completed'
+        WHERE vehicle_id = $1 
+          AND payment_status = 'completed'
+          AND journey_status = 'in_progress'
+        RETURNING ticket_id
+      `, [vehicle_id]);
+    } else {
+      // If journey_status doesn't exist, just verify tickets exist
+      const ticketCheck = await pool.query(`
+        SELECT ticket_id
+        FROM tickets
+        WHERE vehicle_id = $1 
+          AND payment_status = 'completed'
+        LIMIT 1
+      `, [vehicle_id]);
+      
+      updateResult = { rows: ticketCheck.rows };
+    }
+
+    // Get passenger notification fields
+    const hasPassengerPhoneForNotify = ticketColumns.includes('passenger_phone');
+    const hasPassengerEmailForNotify = ticketColumns.includes('passenger_email');
+
+    const passengerNotifyFields = [
+      't.passenger_id',
+      hasPassengerPhoneForNotify ? 't.passenger_phone' : 'u.phone AS passenger_phone',
+      hasPassengerEmailForNotify ? 't.passenger_email' : 'u.email AS passenger_email',
+      'u.user_id',
+      'r.route_name',
+      'v.plate_number'
+    ];
+
+    // Notify all passengers that journey has ended
+    const passengersResult = await pool.query(`
+      SELECT DISTINCT
+        ${passengerNotifyFields.join(',\n        ')}
+      FROM tickets t
+      LEFT JOIN users u ON t.passenger_id = u.user_id
+      JOIN routes r ON t.route_id = r.route_id
+      LEFT JOIN vehicles v ON t.vehicle_id = v.vehicle_id
+      WHERE t.vehicle_id = $1 
+        AND t.payment_status = 'completed'
+    `, [vehicle_id]);
+
+    const notificationPromises = passengersResult.rows.map(passenger => {
+      const userId = passenger.user_id || passenger.passenger_id;
+      
+      return pool.query(
+        `INSERT INTO notifications (user_id, message, title)
+         VALUES ($1, $2, $3)`,
+        [
+          userId,
+          `Your journey on ${passenger.route_name} has ended. Thank you for traveling with us! Vehicle: ${passenger.plate_number || 'N/A'}`,
+          "Journey Completed"
+        ]
+      ).catch(() => null);
+    });
+
+    await Promise.all(notificationPromises);
 
     res.status(200).json({
-      message: "QR code generated",
-      ticket_id: ticket_id,
-      qr_code: qr_code
+      message: "Journey stopped successfully",
+      tickets_updated: updateResult.rows.length,
+      passengers_notified: passengersResult.rows.length
     });
   } catch (err) {
-    console.error("Error generating QR code:", err);
-    res.status(500).json({ error: "Failed to generate QR code", details: err.message });
+    console.error("Error stopping journey:", err);
+    res.status(500).json({ error: "Failed to stop journey", details: err.message });
   }
 };
-

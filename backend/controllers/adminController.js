@@ -7,17 +7,47 @@ import bcrypt from "bcryptjs";
 
 export const registerDriverUser = async (req, res) => {
   try {
-    const { full_name, email, phone, password, role, license_number, status } = req.body;
+    const { 
+      full_name, 
+      email, 
+      phone, 
+      password, 
+      role, 
+      license_number, 
+      license_expiry_date,
+      date_of_birth,
+      address,
+      emergency_contact_name,
+      emergency_contact_phone,
+      status 
+    } = req.body;
 
-    // 1️⃣ Validate input
+    // 1️⃣ Validate required input
     if (!full_name || !email || !phone || !password || !license_number) {
-      return res.status(400).json({ error: "All fields are required" });
+      return res.status(400).json({ error: "Full name, email, phone, password, and license number are required" });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: "Invalid email format" });
+    }
+
+    // Validate password length
+    if (password.length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters long" });
     }
 
     // 2️⃣ Check if email already exists
     const existingUser = await pool.query(`SELECT * FROM users WHERE email = $1`, [email]);
     if (existingUser.rows.length > 0) {
       return res.status(400).json({ error: "Email already registered" });
+    }
+
+    // Check if phone already exists
+    const existingPhone = await pool.query(`SELECT * FROM users WHERE phone = $1`, [phone]);
+    if (existingPhone.rows.length > 0) {
+      return res.status(400).json({ error: "Phone number already registered" });
     }
 
     // 3️⃣ Hash password
@@ -33,29 +63,103 @@ export const registerDriverUser = async (req, res) => {
 
     const userId = userResult.rows[0].user_id;
 
-    // 5️⃣ Insert driver details into drivers table
-    const driverResult = await pool.query(
-      `INSERT INTO drivers (user_id, license_number, status)
-       VALUES ($1, $2, $3)
-       RETURNING driver_id, user_id, license_number, status`,
-      [userId, license_number, status || "active"]
-    );
+    // 5️⃣ Check which optional columns exist in drivers table
+    const driverColumnCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'drivers'
+    `);
+    
+    const driverColumns = driverColumnCheck.rows.map(row => row.column_name);
+    const hasLicenseExpiry = driverColumns.includes('license_expiry_date');
+    const hasDateOfBirth = driverColumns.includes('date_of_birth');
+    const hasAddress = driverColumns.includes('address');
+    const hasEmergencyContact = driverColumns.includes('emergency_contact_name');
 
-    // 6️⃣ Return success response
+    // 6️⃣ Build INSERT query dynamically for drivers table
+    const driverFields = ['user_id', 'license_number', 'status'];
+    const driverValues = [userId, license_number, status || "active"];
+    let paramCount = driverValues.length + 1;
+
+    if (hasLicenseExpiry && license_expiry_date) {
+      driverFields.push('license_expiry_date');
+      driverValues.push(license_expiry_date);
+    }
+    if (hasDateOfBirth && date_of_birth) {
+      driverFields.push('date_of_birth');
+      driverValues.push(date_of_birth);
+    }
+    if (hasAddress && address) {
+      driverFields.push('address');
+      driverValues.push(address);
+    }
+    if (hasEmergencyContact && emergency_contact_name) {
+      driverFields.push('emergency_contact_name');
+      driverValues.push(emergency_contact_name);
+      if (driverColumns.includes('emergency_contact_phone') && emergency_contact_phone) {
+        driverFields.push('emergency_contact_phone');
+        driverValues.push(emergency_contact_phone);
+      }
+    }
+
+    const driverPlaceholders = driverValues.map((_, i) => `$${i + 1}`).join(', ');
+    const driverInsertQuery = `
+      INSERT INTO drivers (${driverFields.join(', ')})
+      VALUES (${driverPlaceholders})
+      RETURNING driver_id, user_id, license_number, status
+    `;
+
+    // Insert driver details into drivers table
+    const driverResult = await pool.query(driverInsertQuery, driverValues);
+
+    // 7️⃣ Send notification to the driver (if notifications table exists)
+    try {
+      const notifyCheck = await pool.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_name = 'notifications'
+        )
+      `);
+      
+      if (notifyCheck.rows[0]?.exists) {
+        await pool.query(
+          `INSERT INTO notifications (user_id, message, title) 
+           VALUES ($1, $2, $3)`,
+          [
+            userId,
+            `Welcome to Camny! Your driver account has been created. Use your email (${email}) and the password provided by admin to login.`,
+            "Driver Account Created"
+          ]
+        );
+      }
+    } catch (notifErr) {
+      console.log("Could not send notification:", notifErr.message);
+    }
+
+    // 8️⃣ Return success response with all driver info
     res.status(201).json({
-      message: "Driver registered successfully",
+      message: "Driver registered successfully! Driver can now login using the provided credentials.",
       driver: {
+        driver_id: driverResult.rows[0].driver_id,
         user_id: userId,
         full_name,
         email,
         phone,
         license_number,
+        license_expiry_date: license_expiry_date || null,
+        date_of_birth: date_of_birth || null,
+        address: address || null,
+        emergency_contact_name: emergency_contact_name || null,
+        emergency_contact_phone: emergency_contact_phone || null,
         status: status || "active",
+        role: "driver",
+        login_email: email,
+        login_password: "As provided above"
       },
     });
   } catch (err) {
     console.error("Error registering driver:", err);
-    res.status(500).json({ error: "Failed to register driver" });
+    res.status(500).json({ error: "Failed to register driver", details: err.message });
   }
 };
 

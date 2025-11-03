@@ -56,41 +56,63 @@ export const getDriverAssignments = async (req, res) => {
       return res.status(400).json({ error: "Driver ID or user authentication required" });
     }
 
+    // Check which columns exist in routes table
+    const routeColumnCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'routes'
+    `);
+    const routeColumns = routeColumnCheck.rows.map(row => row.column_name);
+    const hasRouteStatus = routeColumns.includes('status');
+    const hasExpectedStartTime = routeColumns.includes('expected_start_time');
+
+    // Build SELECT clause dynamically
+    const routeSelectFields = [
+      'r.route_id',
+      'r.route_name',
+      'r.start_location',
+      'r.end_location',
+      'r.distance_km',
+      'r.fare_base',
+      'r.assigned_vehicle',
+      hasRouteStatus ? 'r.status AS route_status' : "NULL AS route_status",
+      hasExpectedStartTime ? 'r.expected_start_time' : 'NULL AS expected_start_time',
+      'v.plate_number',
+      'v.model AS vehicle_model',
+      'v.vehicle_id',
+      'v.status AS vehicle_status',
+      'v.assigned_driver'
+    ];
+
     // Get routes assigned to this driver (through vehicles)
     const routesResult = await pool.query(`
       SELECT 
-        r.route_id,
-        r.route_name,
-        r.start_location,
-        r.end_location,
-        r.distance_km,
-        r.fare_base,
-        r.assigned_vehicle,
-        r.status AS route_status,
-        v.plate_number,
-        v.model AS vehicle_model,
-        v.vehicle_id,
-        v.status AS vehicle_status,
-        v.assigned_driver
+        ${routeSelectFields.join(',\n        ')}
       FROM routes r
       LEFT JOIN vehicles v ON r.assigned_vehicle = v.vehicle_id OR v.assigned_route = r.route_id
       WHERE v.assigned_driver = $1
       ORDER BY r.route_id ASC
     `, [driverId]);
 
+    // Build SELECT clause for driver line assignment
+    const driverLineSelectFields = [
+      'd.assigned_line_id',
+      'r.route_id',
+      'r.route_name',
+      'r.start_location',
+      'r.end_location',
+      hasRouteStatus ? 'r.status AS route_status' : "NULL AS route_status",
+      hasExpectedStartTime ? 'r.expected_start_time' : 'NULL AS expected_start_time',
+      'v.plate_number',
+      'v.model AS vehicle_model',
+      'v.vehicle_id',
+      'v.status AS vehicle_status'
+    ];
+
     // Also check if driver has assigned_line_id in drivers table
     const driverLineResult = await pool.query(`
       SELECT 
-        d.assigned_line_id,
-        r.route_id,
-        r.route_name,
-        r.start_location,
-        r.end_location,
-        r.status AS route_status,
-        v.plate_number,
-        v.model AS vehicle_model,
-        v.vehicle_id,
-        v.status AS vehicle_status
+        ${driverLineSelectFields.join(',\n        ')}
       FROM drivers d
       LEFT JOIN routes r ON d.assigned_line_id = r.route_id
       LEFT JOIN vehicles v ON r.assigned_vehicle = v.vehicle_id

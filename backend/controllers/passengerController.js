@@ -153,40 +153,83 @@ export const getPassengerTickets = async (req, res) => {
     const userPhone = userInfo.rows[0].phone;
     const userEmail = userInfo.rows[0].email;
 
+    // Check which columns exist in tickets table
+    const columnCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'tickets'
+    `);
+    
+    const existingColumns = columnCheck.rows.map(row => row.column_name);
+    const hasPassengerName = existingColumns.includes('passenger_name');
+    const hasPassengerPhone = existingColumns.includes('passenger_phone');
+    const hasPassengerEmail = existingColumns.includes('passenger_email');
+    const hasPaymentMethod = existingColumns.includes('payment_method');
+    const hasQRCode = existingColumns.includes('qr_code');
+    const hasBoardingStatus = existingColumns.includes('boarding_status');
+    const hasJourneyStatus = existingColumns.includes('journey_status');
+    const hasActualStart = existingColumns.includes('actual_start_location');
+    const hasActualEnd = existingColumns.includes('actual_end_location');
+    const hasCalculatedFare = existingColumns.includes('calculated_fare');
+
+    // Build SELECT clause dynamically
+    const selectFields = [
+      't.ticket_id',
+      't.passenger_id',
+      't.route_id',
+      't.vehicle_id',
+      't.seat_number',
+      't.travel_date',
+      't.created_at',
+      hasPassengerName ? 't.passenger_name' : 'NULL AS passenger_name',
+      hasPassengerPhone ? 't.passenger_phone' : 'NULL AS passenger_phone',
+      hasPassengerEmail ? 't.passenger_email' : 'NULL AS passenger_email',
+      't.payment_status',
+      hasPaymentMethod ? 't.payment_method' : 'NULL AS payment_method',
+      't.amount_paid',
+      hasQRCode ? 't.qr_code' : 'NULL AS qr_code',
+      hasBoardingStatus ? 't.boarding_status' : "NULL AS boarding_status",
+      hasJourneyStatus ? 't.journey_status' : 'NULL AS journey_status',
+      hasActualStart ? 't.actual_start_location' : 'NULL AS actual_start_location',
+      hasActualEnd ? 't.actual_end_location' : 'NULL AS actual_end_location',
+      hasCalculatedFare ? 't.calculated_fare' : 't.amount_paid AS calculated_fare',
+      'r.route_name',
+      'r.start_location',
+      'r.end_location',
+      'r.fare_base',
+      'r.map_url',
+      'r.expected_start_time',
+      'v.plate_number',
+      'v.model AS vehicle_model'
+    ];
+
+    // Build WHERE clause - check if passenger_phone/email columns exist
+    let whereClause = 'WHERE t.passenger_id = $1';
+    const whereParams = [passengerId];
+    let paramCount = 2;
+    
+    if (hasPassengerPhone && userPhone) {
+      whereClause += ` OR (t.passenger_phone = $${paramCount} AND t.passenger_phone IS NOT NULL)`;
+      whereParams.push(userPhone);
+      paramCount++;
+    }
+    
+    if (hasPassengerEmail && userEmail) {
+      whereClause += ` OR (t.passenger_email = $${paramCount} AND t.passenger_email IS NOT NULL AND $${paramCount} IS NOT NULL)`;
+      whereParams.push(userEmail);
+      paramCount++;
+    }
+
     // Get tickets where passenger_id matches OR passenger_phone/email matches (for tickets bought for others)
     const result = await pool.query(`
       SELECT 
-        t.ticket_id,
-        t.passenger_id,
-        t.route_id,
-        t.vehicle_id,
-        t.seat_number,
-        t.travel_date,
-        t.created_at,
-        t.passenger_name,
-        t.passenger_phone,
-        t.passenger_email,
-        t.payment_status,
-        t.payment_method,
-        t.amount_paid,
-        t.qr_code,
-        t.boarding_status,
-        t.journey_status,
-        r.route_name,
-        r.start_location,
-        r.end_location,
-        r.fare_base,
-        r.expected_start_time,
-        v.plate_number,
-        v.model AS vehicle_model
+        ${selectFields.join(',\n        ')}
       FROM tickets t
       JOIN routes r ON t.route_id = r.route_id
       LEFT JOIN vehicles v ON t.vehicle_id = v.vehicle_id
-      WHERE t.passenger_id = $1 
-         OR (t.passenger_phone = $2 AND t.passenger_phone IS NOT NULL)
-         OR (t.passenger_email = $3 AND t.passenger_email IS NOT NULL AND $3 IS NOT NULL)
+      ${whereClause}
       ORDER BY t.created_at DESC
-    `, [passengerId, userPhone, userEmail]);
+    `, whereParams);
     
     res.json(result.rows);
   } catch (err) {
@@ -297,21 +340,21 @@ export const bookTicket = async (req, res) => {
     const hasActualStart = existingColumns.includes('actual_start_location');
     const hasActualEnd = existingColumns.includes('actual_end_location');
     const hasCalculatedFare = existingColumns.includes('calculated_fare');
+    const hasQRCode = existingColumns.includes('qr_code');
+    const hasPassengerName = existingColumns.includes('passenger_name');
+    const hasPassengerPhone = existingColumns.includes('passenger_phone');
+    const hasPassengerEmail = existingColumns.includes('passenger_email');
+    const hasPaymentMethod = existingColumns.includes('payment_method');
 
-    // Build INSERT query dynamically based on existing columns
+    // Build INSERT query dynamically based on existing columns (only required fields are always included)
     const insertFields = [
       'passenger_id',
       'route_id',
       'vehicle_id',
       'seat_number',
       'travel_date',
-      'passenger_name',
-      'passenger_phone',
-      'passenger_email',
       'payment_status',
-      'payment_method',
-      'amount_paid',
-      'qr_code'
+      'amount_paid'
     ];
     
     const insertValues = [
@@ -320,17 +363,31 @@ export const bookTicket = async (req, res) => {
       vehicle_id || null,
       seat_number || null,
       travel_date || null,
-      passenger_name,
-      passenger_phone,
-      passenger_email || null,
       "pending",
-      payment_method || null,
-      finalAmount,
-      tempQR
+      finalAmount
     ];
-    
-    let paramCount = insertValues.length + 1;
 
+    // Add optional fields only if they exist
+    if (hasPassengerName) {
+      insertFields.push('passenger_name');
+      insertValues.push(passenger_name);
+    }
+    if (hasPassengerPhone) {
+      insertFields.push('passenger_phone');
+      insertValues.push(passenger_phone);
+    }
+    if (hasPassengerEmail) {
+      insertFields.push('passenger_email');
+      insertValues.push(passenger_email || null);
+    }
+    if (hasPaymentMethod) {
+      insertFields.push('payment_method');
+      insertValues.push(payment_method || null);
+    }
+    if (hasQRCode) {
+      insertFields.push('qr_code');
+      insertValues.push(tempQR);
+    }
     if (hasStartStopId) {
       insertFields.push('start_stop_id');
       insertValues.push(start_stop_id || null);
@@ -363,13 +420,15 @@ export const bookTicket = async (req, res) => {
     // Insert ticket with passenger details
     const ticketResult = await pool.query(insertQuery, insertValues);
 
-    // Update QR code with actual ticket ID
+    // Update QR code with actual ticket ID (if qr_code column exists)
     const ticket = ticketResult.rows[0];
-    const finalQR = generateQRCode(ticket.ticket_id, vehicle_id || 0, route_id);
-    await pool.query(
-      `UPDATE tickets SET qr_code = $1 WHERE ticket_id = $2`,
-      [finalQR, ticket.ticket_id]
-    );
+    if (hasQRCode) {
+      const finalQR = generateQRCode(ticket.ticket_id, vehicle_id || 0, route_id);
+      await pool.query(
+        `UPDATE tickets SET qr_code = $1 WHERE ticket_id = $2`,
+        [finalQR, ticket.ticket_id]
+      );
+    }
     
     // Refresh ticket to get updated QR code
     const updatedTicketResult = await pool.query(
@@ -377,6 +436,30 @@ export const bookTicket = async (req, res) => {
       [ticket.ticket_id]
     );
     const updatedTicket = updatedTicketResult.rows[0];
+
+    // Create notification for passenger when ticket is booked
+    try {
+      const notifyCheck = await pool.query(`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_name = 'notifications'
+        )
+      `);
+      
+      if (notifyCheck.rows[0]?.exists) {
+        await pool.query(
+          `INSERT INTO notifications (user_id, message, title) 
+           VALUES ($1, $2, $3)`,
+          [
+            passenger_id,
+            `Ticket booked successfully for "${route.route_name}" from ${actualStart} to ${actualEnd}. Ticket ID: ${ticket.ticket_id}. Amount: ${finalAmount} RWF. Please complete payment to confirm your booking.`,
+            "Ticket Booked"
+          ]
+        );
+      }
+    } catch (notifErr) {
+      console.log("Could not send notification:", notifErr.message);
+    }
 
     res.status(201).json({
       message: "Ticket created. Please complete payment.",

@@ -5,7 +5,8 @@ import {
   scanTicket,
   confirmBoarding,
   updateLocation,
-  startJourney
+  startJourney,
+  stopJourney
 } from "../controllers/journeyController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
@@ -27,5 +28,6 @@ router.post("/scan-ticket", authMiddleware, scanTicket);
 router.post("/confirm-boarding", authMiddleware, confirmBoarding);
 router.post("/update-location", authMiddleware, updateLocation);
 router.post("/start-journey", authMiddleware, startJourney);
+router.post("/stop-journey", authMiddleware, stopJourney);
 
 export default router;
