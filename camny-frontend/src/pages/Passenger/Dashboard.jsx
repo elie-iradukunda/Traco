@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import { 
-  getPassengerTickets, 
-  getUserNotifications
-} from "../../services/api";
+import { getPassengerTickets, getUserNotifications } from "../../services/api";
 import LogoutButton from "../../components/LogoutButton";
 import LoyaltyPoints from "../../components/Loyalty/LoyaltyPoints";
+import { useTranslation } from "react-i18next";
+import "../../i18n"; // ensure i18n is initialized
 
 const Dashboard = () => {
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [tickets, setTickets] = useState([]);
@@ -23,8 +23,6 @@ const Dashboard = () => {
       return;
     }
     loadData();
-    
-    // Refresh data every 30 seconds for real-time updates
     const interval = setInterval(loadData, 30000);
     return () => clearInterval(interval);
   }, [user, navigate]);
@@ -34,22 +32,18 @@ const Dashboard = () => {
       setLoading(true);
       const [ticketsRes, notificationsRes] = await Promise.all([
         getPassengerTickets(user.user_id),
-        getUserNotifications(user.user_id)
+        getUserNotifications(user.user_id),
       ]);
-      
+
       setTickets(ticketsRes.data || []);
       setNotifications(notificationsRes.data || []);
-      
-      // Find active journey (in_progress)
       const active = (ticketsRes.data || []).find(
-        t => t.journey_status === "in_progress" || t.boarding_status === "confirmed"
+        (t) =>
+          t.journey_status === "in_progress" ||
+          t.boarding_status === "confirmed"
       );
       setActiveTicket(active);
-      
-      // If there's an active ticket, load location updates
-      if (active) {
-        loadLocationUpdates(notificationsRes.data || []);
-      }
+      if (active) loadLocationUpdates(notificationsRes.data || []);
     } catch (err) {
       console.error("Error loading dashboard data:", err);
     } finally {
@@ -59,91 +53,117 @@ const Dashboard = () => {
 
   const loadLocationUpdates = (allNotifications) => {
     try {
-      // Extract location updates from notifications
       const updates = allNotifications
-        .filter(n => 
-          n.message?.includes("Location update") || 
-          n.message?.includes("Currently at")
+        .filter(
+          (n) =>
+            n.message?.includes("Location update") ||
+            n.message?.includes("Currently at")
         )
-        .map(n => ({
-          location: n.message?.match(/Currently at (.+?)(?:\.|$)/)?.[1] || 
-                    n.message?.match(/at (.+?)(?:\.|$)/)?.[1] || 
-                    "Unknown",
+        .map((n) => ({
+          location:
+            n.message?.match(/Currently at (.+?)(?:\.|$)/)?.[1] ||
+            n.message?.match(/at (.+?)(?:\.|$)/)?.[1] ||
+            "Unknown",
           timestamp: n.created_at,
-          message: n.message
+          message: n.message,
         }))
         .reverse();
-      
       setLocationUpdates(updates);
     } catch (err) {
       console.error("Error loading location updates:", err);
     }
   };
 
+  const handleLanguageChange = (e) => {
+    i18n.changeLanguage(e.target.value);
+  };
+
   if (!user) return null;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-4xl font-extrabold text-gray-900 mb-2">
-              Passenger Dashboard
-            </h1>
-            <p className="text-gray-600">
-              Welcome, {user.full_name || "Passenger"}! Track your journeys and stay updated.
-            </p>
-          </div>
-          <div className="flex gap-4 items-center">
-            <button
-              onClick={() => navigate("/passenger/browse")}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              Browse Routes
-            </button>
-            <button
-              onClick={() => navigate("/passenger/tickets")}
-              className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-            >
-              My Tickets
-            </button>
-            <LogoutButton />
-          </div>
+      {/* Navbar with translation dropdown */}
+      <nav className="bg-white shadow-md p-4 flex justify-between items-center sticky top-0 z-50">
+        <div className="text-2xl font-bold text-blue-700">
+          🚌 {t("dashboard.title")}
         </div>
+
+        <div className="flex items-center gap-4">
+          <select
+            onChange={handleLanguageChange}
+            defaultValue={i18n.language}
+            className="border border-gray-300 rounded-lg px-3 py-1 text-gray-700 focus:ring-2 focus:ring-blue-500"
+          >
+            <option value="en">{t("common.languages.en")}</option>
+            <option value="rw">{t("common.languages.rw")}</option>
+            <option value="sw">{t("common.languages.sw")}</option>
+            <option value="fr">{t("common.languages.fr")}</option>
+          </select>
+
+          <button
+            onClick={() => navigate("/passenger/browse")}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            {t("common.browseRoutes")}
+          </button>
+
+          <button
+            onClick={() => navigate("/passenger/tickets")}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            {t("common.myTickets")}
+          </button>
+
+          <LogoutButton />
+        </div>
+      </nav>
+
+      {/* Welcome Section */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <h1 className="text-4xl font-extrabold text-gray-900 mb-2">
+          {t("dashboard.title")}
+        </h1>
+        <p className="text-gray-600 mb-8">
+          {t("dashboard.welcome")}, {user.full_name || t("common.passenger")}!{" "}
+          {t("dashboard.subtitle")}
+        </p>
 
         {loading ? (
           <div className="flex justify-center items-center h-64">
-            <div className="text-xl text-gray-500">Loading dashboard...</div>
+            <div className="text-xl text-gray-500">{t("dashboard.loading")}</div>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Active Journey Tracking */}
             <div className="lg:col-span-2 space-y-6">
               {activeTicket ? (
-                <ActiveJourneyCard 
-                  ticket={activeTicket} 
+                <ActiveJourneyCard
+                  ticket={activeTicket}
                   locationUpdates={locationUpdates}
+                  t={t}
                 />
               ) : (
                 <div className="bg-white rounded-xl shadow-lg p-6 text-center">
                   <div className="text-6xl mb-4">🚌</div>
-                  <h3 className="text-2xl font-bold text-gray-900 mb-2">No Active Journey</h3>
+                  <h3 className="text-2xl font-bold text-gray-900 mb-2">
+                    {t("dashboard.noActiveJourney")}
+                  </h3>
                   <p className="text-gray-600 mb-6">
-                    You don't have any active journeys right now. Book a ticket to start tracking!
+                    {t("dashboard.noActiveSubtitle")}
                   </p>
                   <button
                     onClick={() => navigate("/passenger/browse")}
                     className="px-6 py-3 bg-gradient-to-r from-blue-600 to-green-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-green-700 transition-all duration-300"
                   >
-                    Browse Routes
+                    {t("common.browseRoutes")}
                   </button>
                 </div>
               )}
 
               {/* Recent Tickets */}
               <div className="bg-white rounded-xl shadow-lg p-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-4">Recent Tickets</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">
+                  {t("dashboard.recentTickets")}
+                </h2>
                 {tickets.length > 0 ? (
                   <div className="space-y-3">
                     {tickets.slice(0, 3).map((ticket) => (
@@ -153,12 +173,14 @@ const Dashboard = () => {
                       >
                         <div className="flex justify-between items-start">
                           <div>
-                            <h3 className="font-semibold text-gray-900">{ticket.route_name}</h3>
+                            <h3 className="font-semibold text-gray-900">
+                              {ticket.route_name}
+                            </h3>
                             <p className="text-sm text-gray-600">
                               {ticket.start_location} → {ticket.end_location}
                             </p>
                             <p className="text-xs text-gray-500 mt-1">
-                              Ticket ID: #{ticket.ticket_id}
+                              {t("dashboard.ticketId")}: #{ticket.ticket_id}
                             </p>
                           </div>
                           <span
@@ -171,34 +193,34 @@ const Dashboard = () => {
                             }`}
                           >
                             {ticket.journey_status === "in_progress"
-                              ? "In Journey"
-                              : ticket.payment_status || "Pending"}
+                              ? t("dashboard.inJourney")
+                              : ticket.payment_status || t("dashboard.pending")}
                           </span>
                         </div>
                         <button
                           onClick={() => navigate("/passenger/tickets")}
                           className="mt-2 text-sm text-blue-600 hover:text-blue-800"
                         >
-                          View Details →
+                          {t("dashboard.viewDetails")}
                         </button>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-gray-500 text-center py-4">No tickets yet</p>
+                  <p className="text-gray-500 text-center py-4">
+                    {t("dashboard.noTickets")}
+                  </p>
                 )}
               </div>
             </div>
 
             {/* Sidebar */}
             <div className="lg:col-span-1 space-y-6">
-              {/* Loyalty Points */}
               <LoyaltyPoints />
-              
-              {/* Notifications */}
-              <NotificationsPanel 
+              <NotificationsPanel
                 notifications={notifications}
                 onRefresh={loadData}
+                t={t}
               />
             </div>
           </div>
@@ -208,78 +230,45 @@ const Dashboard = () => {
   );
 };
 
-// Active Journey Tracking Card
-const ActiveJourneyCard = ({ ticket, locationUpdates }) => {
+/* ActiveJourneyCard */
+const ActiveJourneyCard = ({ ticket, locationUpdates, t }) => {
   const [showMap, setShowMap] = useState(false);
-  
-  // Extract map_url from ticket (it should come from routes table)
   const mapUrl = ticket.map_url || null;
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-green-600">
       <div className="flex justify-between items-start mb-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-1">Active Journey</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-1">
+            {t("dashboard.activeJourney")}
+          </h2>
           <p className="text-gray-600">{ticket.route_name}</p>
         </div>
         <span className="px-4 py-2 bg-green-100 text-green-800 rounded-full text-sm font-semibold">
-          🚗 In Progress
+          🚗 {t("dashboard.inProgress")}
         </span>
       </div>
-
-      {/* Route Information */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <p className="text-sm text-gray-600">From</p>
-          <p className="font-semibold text-gray-900">
-            {ticket.actual_start_location || ticket.start_location}
-          </p>
-        </div>
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <p className="text-sm text-gray-600">To</p>
-          <p className="font-semibold text-gray-900">
-            {ticket.actual_end_location || ticket.end_location}
-          </p>
-        </div>
-      </div>
-
-      {/* Vehicle Info */}
-      {ticket.plate_number && (
-        <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-          <p className="text-sm text-gray-600">Vehicle</p>
-          <p className="font-semibold text-blue-900">{ticket.plate_number}</p>
-        </div>
-      )}
-
-      {/* Map Display */}
       {mapUrl && (
-        <div className="mb-4">
+        <>
           <button
             onClick={() => setShowMap(!showMap)}
-            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium mb-2"
+            className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 mb-2"
           >
-            {showMap ? "Hide" : "Show"} Route Map
+            {showMap ? t("dashboard.hideMap") : t("dashboard.showMap")}
           </button>
           {showMap && (
-            <div className="w-full h-64 bg-gray-100 rounded-lg overflow-hidden border-2 border-blue-300">
-              <iframe
-                src={mapUrl}
-                width="100%"
-                height="100%"
-                style={{ border: 0 }}
-                allowFullScreen
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-                title="Route Map"
-              />
-            </div>
+            <iframe
+              src={mapUrl}
+              className="w-full h-64 border rounded-lg"
+              allowFullScreen
+              loading="lazy"
+              title={t("dashboard.routeMap")}
+            />
           )}
-        </div>
+        </>
       )}
-
-      {/* Location Updates */}
       <div className="mt-4">
-        <h3 className="font-semibold text-gray-900 mb-3">Location Updates</h3>
+        <h3 className="font-semibold text-gray-900 mb-3">{t("dashboard.locationUpdates")}</h3>
         {locationUpdates.length > 0 ? (
           <div className="space-y-2 max-h-48 overflow-y-auto">
             {locationUpdates.map((update, index) => (
@@ -287,110 +276,76 @@ const ActiveJourneyCard = ({ ticket, locationUpdates }) => {
                 key={index}
                 className="bg-green-50 border border-green-200 rounded-lg p-3"
               >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <p className="font-semibold text-green-900">{update.location}</p>
-                    <p className="text-xs text-gray-600 mt-1">
-                      {new Date(update.timestamp).toLocaleString()}
-                    </p>
-                  </div>
-                  <span className="text-green-600">📍</span>
-                </div>
+                <p className="font-semibold text-green-900">
+                  {update.location}
+                </p>
+                <p className="text-xs text-gray-600 mt-1">
+                  {new Date(update.timestamp).toLocaleString()}
+                </p>
               </div>
             ))}
           </div>
         ) : (
-          <div className="bg-gray-50 p-4 rounded-lg text-center">
-            <p className="text-gray-600 text-sm">No location updates yet</p>
-            <p className="text-xs text-gray-500 mt-1">
-              Driver will update location during the journey
-            </p>
-          </div>
+          <div className="text-gray-500 text-sm">{t("dashboard.noUpdates")}</div>
         )}
-      </div>
-
-      {/* Journey Status */}
-      <div className="mt-4 pt-4 border-t border-gray-200">
-        <div className="flex justify-between items-center">
-          <div>
-            <p className="text-sm text-gray-600">Journey Status</p>
-            <p className="font-semibold text-blue-600">In Progress</p>
-          </div>
-          {ticket.boarding_status === "confirmed" && (
-            <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-semibold">
-              ✅ Boarding Confirmed
-            </span>
-          )}
-        </div>
       </div>
     </div>
   );
 };
 
-// Notifications Panel Component
-const NotificationsPanel = ({ notifications, onRefresh }) => {
+/* NotificationsPanel */
+const NotificationsPanel = ({ notifications, onRefresh, t }) => {
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
-    const unread = notifications.filter(n => !n.read_status || n.read_status === false).length;
-    setUnreadCount(unread);
+    setUnreadCount(
+      notifications.filter((n) => !n.read_status || n.read_status === false)
+        .length
+    );
   }, [notifications]);
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-6 sticky top-4">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold text-gray-900">Notifications</h2>
+        <h2 className="text-2xl font-bold text-gray-900">{t("dashboard.notifications")}</h2>
         {unreadCount > 0 && (
           <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-semibold">
-            {unreadCount} New
+            {unreadCount} {t("dashboard.new")}
           </span>
         )}
       </div>
-
       <button
         onClick={onRefresh}
         className="mb-4 text-sm text-blue-600 hover:text-blue-800"
       >
-        🔄 Refresh
+        🔄 {t("common.refresh")}
       </button>
-
       <div className="space-y-3 max-h-96 overflow-y-auto">
         {notifications.length > 0 ? (
           notifications.slice(0, 10).map((notification) => (
             <div
               key={notification.notification_id}
               className={`border rounded-lg p-3 ${
-                !notification.read_status || notification.read_status === false
+                !notification.read_status
                   ? "bg-blue-50 border-blue-200"
                   : "bg-gray-50 border-gray-200"
               }`}
             >
-              <div className="flex justify-between items-start mb-1">
-                <h4 className="font-semibold text-gray-900 text-sm">
-                  {notification.title}
-                </h4>
-                {!notification.read_status && (
-                  <span className="w-2 h-2 bg-blue-600 rounded-full"></span>
-                )}
-              </div>
-              <p className="text-xs text-gray-600 mb-2">{notification.message}</p>
+              <h4 className="font-semibold text-gray-900 text-sm">
+                {notification.title}
+              </h4>
+              <p className="text-xs text-gray-600 mb-2">
+                {notification.message}
+              </p>
               <p className="text-xs text-gray-400">
                 {new Date(notification.created_at).toLocaleString()}
               </p>
             </div>
           ))
         ) : (
-          <div className="text-center py-8 text-gray-500">
-            <p>No notifications yet</p>
-          </div>
+          <p className="text-center text-gray-500">{t("dashboard.noNotifications")}</p>
         )}
       </div>
-
-      {notifications.length > 10 && (
-        <button className="mt-4 w-full text-sm text-blue-600 hover:text-blue-800">
-          View All Notifications →
-        </button>
-      )}
     </div>
   );
 };

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
-import { 
-  getAllPassengerRoutes, 
-  getAllAvailableVehicles, 
+import {
+  getAllPassengerRoutes,
+  getAllAvailableVehicles,
   getVehiclesForRoute,
   bookTicket,
   processPayment,
@@ -11,8 +11,11 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import LogoutButton from "../../components/LogoutButton";
+import { useTranslation } from "react-i18next";
+import "../../i18n"; // ensure i18n is initialized
 
 const BookTicket = () => {
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState(1); // 1: Route, 2: Destination, 3: Vehicle, 4: Passenger Details, 5: Payment
@@ -54,7 +57,7 @@ const BookTicket = () => {
       return;
     }
     loadData();
-    
+
     // Check if route was passed from BrowseRoutes
     const locationState = window.history.state?.usr || {};
     if (locationState.route) {
@@ -73,7 +76,7 @@ const BookTicket = () => {
       setVehicles(vehiclesRes.data || []);
     } catch (err) {
       console.error("Error loading data:", err);
-      setError("Failed to load routes and vehicles");
+      setError(t("bookTicket.errors.loadData"));
     } finally {
       setLoading(false);
     }
@@ -92,13 +95,13 @@ const BookTicket = () => {
       actual_end_location: ""
     });
     setCalculatedFare(route.fare_base || 0);
-    
+
     // Load route stops if available
     try {
       setLoadingStops(true);
       const stopsRes = await getRouteStops(route.route_id);
       setRouteStops(stopsRes.data || []);
-      
+
       // If no stops, use default route locations
       if (!stopsRes.data || stopsRes.data.length === 0) {
         setFormData(prev => ({
@@ -113,30 +116,30 @@ const BookTicket = () => {
     } finally {
       setLoadingStops(false);
     }
-    
+
     setStep(2);
   };
-  
+
   const handleStopSelection = async (startStopId, endStopId) => {
     if (!startStopId || !endStopId || startStopId === endStopId) {
       return;
     }
-    
+
     setFormData(prev => ({
       ...prev,
       start_stop_id: startStopId,
       end_stop_id: endStopId
     }));
-    
+
     // Calculate fare based on selected stops
     try {
       const fareRes = await calculateFareBetweenStops(selectedRoute.route_id, startStopId, endStopId);
       setCalculatedFare(fareRes.data.fare || selectedRoute.fare_base || 0);
-      
+
       // Update actual locations
       const startStop = routeStops.find(s => s.stop_id === parseInt(startStopId));
       const endStop = routeStops.find(s => s.stop_id === parseInt(endStopId));
-      
+
       setFormData(prev => ({
         ...prev,
         actual_start_location: startStop?.stop_name || prev.start_location,
@@ -150,7 +153,7 @@ const BookTicket = () => {
 
   const handleDestinationSelect = async (destination) => {
     setFormData({ ...formData, end_location: destination });
-    
+
     // Load vehicles for this route
     try {
       const res = await getVehiclesForRoute(formData.route_id);
@@ -158,7 +161,7 @@ const BookTicket = () => {
     } catch (err) {
       console.error("Error loading vehicles:", err);
     }
-    
+
     setStep(3);
   };
 
@@ -169,9 +172,9 @@ const BookTicket = () => {
 
   const handleCreateTicket = async (e) => {
     e.preventDefault();
-    
+
     if (!formData.passenger_name || !formData.passenger_phone) {
-      setError("Passenger name and phone are required");
+      setError(t("bookTicket.errors.requiredFields"));
       return;
     }
 
@@ -201,7 +204,7 @@ const BookTicket = () => {
       setError("");
     } catch (err) {
       console.error("Error creating ticket:", err);
-      setError(err.response?.data?.error || "Failed to create ticket");
+      setError(err.response?.data?.error || t("bookTicket.errors.createTicket"));
     } finally {
       setLoading(false);
     }
@@ -209,7 +212,7 @@ const BookTicket = () => {
 
   const handlePayment = async () => {
     if (!formData.payment_phone) {
-      setError("Please enter your MTN Mobile Money phone number");
+      setError(t("bookTicket.errors.paymentPhone"));
       return;
     }
 
@@ -220,13 +223,13 @@ const BookTicket = () => {
         phone_number: formData.payment_phone
       });
 
-      setMessage(`✅ Payment successful! Transaction ID: ${res.data.transaction_id}`);
+      setMessage(t("bookTicket.success.payment", { transactionId: res.data.transaction_id }));
       setTimeout(() => {
         navigate("/passenger/tickets");
       }, 2000);
     } catch (err) {
       console.error("Payment error:", err);
-      setError(err.response?.data?.error || "Payment failed");
+      setError(err.response?.data?.error || t("bookTicket.errors.paymentFailed"));
     } finally {
       setProcessingPayment(false);
     }
@@ -250,15 +253,15 @@ const BookTicket = () => {
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-4xl font-extrabold text-gray-900 mb-2">Book a Ticket</h1>
-            <p className="text-gray-600">Complete your booking in a few simple steps</p>
+            <h1 className="text-4xl font-extrabold text-gray-900 mb-2">{t("bookTicket.title")}</h1>
+            <p className="text-gray-600">{t("bookTicket.subtitle")}</p>
           </div>
           <div className="flex gap-4 items-center">
             <button
               onClick={() => navigate("/passenger/browse")}
               className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
             >
-              Back to Browse
+              {t("bookTicket.backToBrowse")}
             </button>
             <LogoutButton />
           </div>
@@ -289,11 +292,11 @@ const BookTicket = () => {
             ))}
           </div>
           <div className="flex justify-between mt-2 text-xs text-gray-600">
-            <span>Route</span>
-            <span>Destination</span>
-            <span>Vehicle</span>
-            <span>Details</span>
-            <span>Payment</span>
+            <span>{t("bookTicket.steps.route")}</span>
+            <span>{t("bookTicket.steps.destination")}</span>
+            <span>{t("bookTicket.steps.vehicle")}</span>
+            <span>{t("bookTicket.steps.details")}</span>
+            <span>{t("bookTicket.steps.payment")}</span>
           </div>
         </div>
 
@@ -308,11 +311,11 @@ const BookTicket = () => {
         {/* Step 1: Select Route */}
         {step === 1 && (
           <div className="bg-white rounded-xl shadow-lg p-6">
-            <h2 className="text-2xl font-bold mb-6">Select Route</h2>
+            <h2 className="text-2xl font-bold mb-6">{t("bookTicket.selectRoute")}</h2>
             {loading ? (
-              <div className="text-center py-12">Loading routes...</div>
+              <div className="text-center py-12">{t("bookTicket.loadingRoutes")}</div>
             ) : routes.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">No routes available</div>
+              <div className="text-center py-12 text-gray-500">{t("bookTicket.noRoutes")}</div>
             ) : (
               <div className="grid grid-cols-1 gap-4">
                 {routes.map((route) => (
@@ -337,7 +340,7 @@ const BookTicket = () => {
                         )}
                       </div>
                       <button className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                        Select
+                        {t("bookTicket.select")}
                       </button>
                     </div>
                   </div>
@@ -350,20 +353,20 @@ const BookTicket = () => {
         {/* Step 2: Select Start and Destination Stops */}
         {step === 2 && selectedRoute && (
           <div className="bg-white rounded-xl shadow-lg p-6">
-            <h2 className="text-2xl font-bold mb-6">Select Your Journey Points</h2>
+            <h2 className="text-2xl font-bold mb-6">{t("bookTicket.selectJourneyPoints")}</h2>
             <div className="mb-4 p-4 bg-blue-50 rounded-lg">
               <p className="text-sm font-semibold text-blue-900">{selectedRoute.route_name}</p>
               <p className="text-xs text-blue-700">{selectedRoute.start_location} → {selectedRoute.end_location}</p>
             </div>
-            
+
             {loadingStops ? (
-              <div className="text-center py-8">Loading stops...</div>
+              <div className="text-center py-8">{t("bookTicket.loadingStops")}</div>
             ) : routeStops.length > 0 ? (
               <div className="space-y-6">
                 {/* Start Point Selection */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-3">
-                    🚩 Select Your Starting Point
+                    🚩 {t("bookTicket.startingPoint")}
                   </label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {routeStops.map((stop) => (
@@ -384,7 +387,7 @@ const BookTicket = () => {
                       >
                         <div className="font-semibold">{stop.stop_name}</div>
                         <div className="text-xs text-gray-600 mt-1">
-                          Order: {stop.stop_order} • Fare from start: {stop.fare_from_start} RWF
+                          {t("bookTicket.order")}: {stop.stop_order} • {t("bookTicket.fareFromStart")}: {stop.fare_from_start} RWF
                         </div>
                       </button>
                     ))}
@@ -395,7 +398,7 @@ const BookTicket = () => {
                 {formData.start_stop_id && (
                   <div>
                     <label className="block text-sm font-semibold text-gray-700 mb-3">
-                      🎯 Select Your Destination
+                      🎯 {t("bookTicket.destination")}
                     </label>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {routeStops
@@ -414,7 +417,7 @@ const BookTicket = () => {
                           >
                             <div className="font-semibold">{stop.stop_name}</div>
                             <div className="text-xs text-gray-600 mt-1">
-                              Order: {stop.stop_order} • Fare from start: {stop.fare_from_start} RWF
+                              {t("bookTicket.order")}: {stop.stop_order} • {t("bookTicket.fareFromStart")}: {stop.fare_from_start} RWF
                             </div>
                           </button>
                         ))}
@@ -427,13 +430,13 @@ const BookTicket = () => {
                   <div className="p-4 bg-green-50 border-2 border-green-200 rounded-lg">
                     <div className="flex justify-between items-center">
                       <div>
-                        <p className="text-sm font-semibold text-gray-700">Your Journey:</p>
+                        <p className="text-sm font-semibold text-gray-700">{t("bookTicket.yourJourney")}:</p>
                         <p className="text-lg font-bold text-gray-900">
                           {formData.actual_start_location} → {formData.actual_end_location}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm text-gray-600">Fare:</p>
+                        <p className="text-sm text-gray-600">{t("bookTicket.fare")}:</p>
                         <p className="text-2xl font-bold text-green-600">{calculatedFare} RWF</p>
                       </div>
                     </div>
@@ -442,20 +445,20 @@ const BookTicket = () => {
               </div>
             ) : (
               <div className="space-y-4">
-                <p className="text-gray-600 mb-4">No sub-routes available. Using main route.</p>
+                <p className="text-gray-600 mb-4">{t("bookTicket.noSubRoutes")}</p>
                 <div className="p-4 bg-gray-50 rounded-lg">
                   <p className="font-semibold">{selectedRoute.start_location} → {selectedRoute.end_location}</p>
                   <p className="text-lg font-bold text-green-600 mt-2">{calculatedFare} RWF</p>
                 </div>
               </div>
             )}
-            
+
             <div className="mt-6 flex gap-4">
               <button
                 onClick={() => setStep(1)}
                 className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
               >
-                Back
+                {t("common.back")}
               </button>
               {(routeStops.length === 0 || (formData.start_stop_id && formData.end_stop_id)) && (
                 <button
@@ -467,12 +470,12 @@ const BookTicket = () => {
                       setStep(3);
                     } catch (err) {
                       console.error("Error loading vehicles:", err);
-                      setError("Failed to load vehicles");
+                      setError(t("bookTicket.errors.loadVehicles"));
                     }
                   }}
                   className="flex-1 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
-                  Continue to Vehicle Selection
+                  {t("bookTicket.continueToVehicle")}
                 </button>
               )}
             </div>
@@ -482,15 +485,15 @@ const BookTicket = () => {
         {/* Step 3: Select Vehicle */}
         {step === 3 && (
           <div className="bg-white rounded-xl shadow-lg p-6">
-            <h2 className="text-2xl font-bold mb-6">Select Vehicle</h2>
+            <h2 className="text-2xl font-bold mb-6">{t("bookTicket.selectVehicle")}</h2>
             {vehicles.length === 0 ? (
               <div className="text-center py-12 text-gray-500">
-                No vehicles available for this route. You can proceed without selecting a vehicle.
+                {t("bookTicket.noVehicles")}
                 <button
                   onClick={() => setStep(4)}
                   className="mt-4 block mx-auto px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                 >
-                  Continue Without Vehicle
+                  {t("bookTicket.continueWithoutVehicle")}
                 </button>
               </div>
             ) : (
@@ -510,12 +513,12 @@ const BookTicket = () => {
                         <h3 className="font-bold text-lg">{vehicle.plate_number}</h3>
                         <p className="text-gray-600">{vehicle.model}</p>
                         {vehicle.driver_name && (
-                          <p className="text-sm text-gray-500">Driver: {vehicle.driver_name}</p>
+                          <p className="text-sm text-gray-500">{t("bookTicket.driver")}: {vehicle.driver_name}</p>
                         )}
-                        <p className="text-sm text-gray-500">Capacity: {vehicle.capacity} seats</p>
+                        <p className="text-sm text-gray-500">{t("bookTicket.capacity")}: {vehicle.capacity} {t("bookTicket.seats")}</p>
                       </div>
                       <button className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                        Select
+                        {t("bookTicket.select")}
                       </button>
                     </div>
                   </div>
@@ -527,14 +530,14 @@ const BookTicket = () => {
                 onClick={() => setStep(2)}
                 className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
               >
-                Back
+                {t("common.back")}
               </button>
               {vehicles.length > 0 && (
                 <button
                   onClick={() => setStep(4)}
                   className="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
                 >
-                  Skip Vehicle Selection
+                  {t("bookTicket.skipVehicle")}
                 </button>
               )}
             </div>
@@ -544,8 +547,8 @@ const BookTicket = () => {
         {/* Step 4: Passenger Details */}
         {step === 4 && (
           <div className="bg-white rounded-xl shadow-lg p-6">
-            <h2 className="text-2xl font-bold mb-6">Passenger Details</h2>
-            
+            <h2 className="text-2xl font-bold mb-6">{t("bookTicket.passengerDetails")}</h2>
+
             <div className="mb-4 flex items-center gap-4">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -554,14 +557,14 @@ const BookTicket = () => {
                   onChange={toggleBookingFor}
                   className="w-4 h-4"
                 />
-                <span>Book for myself</span>
+                <span>{t("bookTicket.bookForMyself")}</span>
               </label>
             </div>
 
             <form onSubmit={handleCreateTicket} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Passenger Name *
+                  {t("bookTicket.passengerName")} *
                 </label>
                 <input
                   type="text"
@@ -574,7 +577,7 @@ const BookTicket = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Passenger Phone *
+                  {t("bookTicket.passengerPhone")} *
                 </label>
                 <input
                   type="tel"
@@ -588,7 +591,7 @@ const BookTicket = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Passenger Email (Optional)
+                  {t("bookTicket.passengerEmail")} ({t("common.optional")})
                 </label>
                 <input
                   type="email"
@@ -601,7 +604,7 @@ const BookTicket = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Travel Date (Optional)
+                  {t("bookTicket.travelDate")} ({t("common.optional")})
                 </label>
                 <input
                   type="date"
@@ -614,7 +617,7 @@ const BookTicket = () => {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Seat Number (Optional)
+                  {t("bookTicket.seatNumber")} ({t("common.optional")})
                 </label>
                 <input
                   type="text"
@@ -627,12 +630,12 @@ const BookTicket = () => {
 
               <div className="bg-blue-50 p-4 rounded-lg space-y-2">
                 <div className="flex justify-between items-center">
-                  <span className="font-semibold text-lg">Total Fare:</span>
+                  <span className="font-semibold text-lg">{t("bookTicket.totalFare")}:</span>
                   <span className="text-2xl font-bold text-green-600">{calculatedFare} RWF</span>
                 </div>
                 {selectedRoute?.expected_start_time && (
                   <div className="flex justify-between items-center pt-2 border-t border-blue-200">
-                    <span className="font-semibold text-sm">Expected Departure:</span>
+                    <span className="font-semibold text-sm">{t("bookTicket.expectedDeparture")}:</span>
                     <span className="font-bold text-blue-700">
                       {new Date(selectedRoute.expected_start_time).toLocaleString()}
                     </span>
@@ -646,14 +649,14 @@ const BookTicket = () => {
                   onClick={() => setStep(3)}
                   className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
                 >
-                  Back
+                  {t("common.back")}
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
                   className="flex-1 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {loading ? "Creating..." : "Create Ticket"}
+                  {loading ? t("bookTicket.creating") : t("bookTicket.createTicket")}
                 </button>
               </div>
             </form>
@@ -663,27 +666,27 @@ const BookTicket = () => {
         {/* Step 5: Payment */}
         {step === 5 && createdTicket && (
           <div className="bg-white rounded-xl shadow-lg p-6">
-            <h2 className="text-2xl font-bold mb-6">Complete Payment</h2>
-            
+            <h2 className="text-2xl font-bold mb-6">{t("bookTicket.completePayment")}</h2>
+
             <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-              <div className="text-sm text-gray-600 mb-2">Ticket Created:</div>
-              <div className="font-bold text-lg">Ticket ID: #{createdTicket.ticket_id}</div>
+              <div className="text-sm text-gray-600 mb-2">{t("bookTicket.ticketCreated")}:</div>
+              <div className="font-bold text-lg">{t("bookTicket.ticketId")}: #{createdTicket.ticket_id}</div>
             </div>
 
             <div className="space-y-4 mb-6">
               <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-semibold mb-2">Route Information</h3>
+                <h3 className="font-semibold mb-2">{t("bookTicket.routeInfo")}</h3>
                 <p>{selectedRoute?.route_name}</p>
                 <p className="text-gray-600">{formData.start_location} → {formData.end_location}</p>
                 {selectedRoute?.expected_start_time && (
                   <p className="text-blue-600 font-semibold mt-2">
-                    🕐 Departure: {new Date(selectedRoute.expected_start_time).toLocaleString()}
+                    🕐 {t("bookTicket.departure")}: {new Date(selectedRoute.expected_start_time).toLocaleString()}
                   </p>
                 )}
               </div>
 
               <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-semibold mb-2">Passenger</h3>
+                <h3 className="font-semibold mb-2">{t("bookTicket.passenger")}</h3>
                 <p>{formData.passenger_name}</p>
                 <p className="text-gray-600">{formData.passenger_phone}</p>
                 {formData.passenger_email && (
@@ -693,14 +696,14 @@ const BookTicket = () => {
 
               <div className="bg-blue-50 p-4 rounded-lg">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="font-semibold text-lg">Amount to Pay:</span>
+                  <span className="font-semibold text-lg">{t("bookTicket.amountToPay")}:</span>
                   <span className="text-2xl font-bold text-green-600">{calculatedFare} RWF</span>
                 </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  MTN Mobile Money Phone Number *
+                  {t("bookTicket.mtnPhone")} *
                 </label>
                 <input
                   type="tel"
@@ -711,7 +714,7 @@ const BookTicket = () => {
                   required
                 />
                 <p className="text-sm text-gray-500 mt-1">
-                  Enter your MTN Mobile Money number to complete payment
+                  {t("bookTicket.paymentNote")}
                 </p>
               </div>
             </div>
@@ -721,14 +724,14 @@ const BookTicket = () => {
                 onClick={() => navigate("/passenger/tickets")}
                 className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300"
               >
-                Pay Later
+                {t("bookTicket.payLater")}
               </button>
               <button
                 onClick={handlePayment}
                 disabled={processingPayment || !formData.payment_phone}
                 className="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
               >
-                {processingPayment ? "Processing..." : "Pay Now (MTN Mobile Money)"}
+                {processingPayment ? t("bookTicket.processing") : t("bookTicket.payNow")}
               </button>
             </div>
           </div>
@@ -739,4 +742,3 @@ const BookTicket = () => {
 };
 
 export default BookTicket;
-

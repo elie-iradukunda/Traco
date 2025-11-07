@@ -1,0 +1,87 @@
+{
+  "common": {
+    "back": "Garuka",
+    "dashboard": "Dashboard",
+    "myTickets": "Tike Zanjye",
+    "browseRoutes": "Reba Inzira",
+    "refresh": "Ongeramo amakuru",
+    "optional": "Birashoboka",
+    "passenger": "Umugenzi",
+    "languages": {
+      "en": "Icyongereza",
+      "rw": "Kinyarwanda",
+      "sw": "Kiswahili",
+      "fr": "Igifaransa"
+    }
+  },
+  "bookTicket": {
+    "title": "Fata Tike",
+    "subtitle": "Kurangiza gufata tike mu byiciro bike byoroshye",
+    "backToBrowse": "Garuka mu gushakisha",
+    "steps": {
+      "route": "Inzira",
+      "destination": "Aho ujya",
+      "vehicle": "Ikirere",
+      "details": "Ibisobanuro",
+      "payment": "Kwishyura"
+    },
+    "selectRoute": "Hitamo Inzira",
+    "loadingRoutes": "Kurindira inzira...",
+    "noRoutes": "Nta nzira iboneka",
+    "select": "Hitamo",
+    "selectJourneyPoints": "Hitamo aho urugendo rwawe rutangirira n'aho rurangirira",
+    "startingPoint": "Hitamo aho utangirira",
+    "destination": "Hitamo aho ujya",
+    "order": "Tanga itegeko",
+    "fareFromStart": "Igiciro kuva aho utangiriye",
+    "yourJourney": "Urugendo rwawe",
+    "fare": "Igiciro",
+    "noSubRoutes": "Nta nzira nto iboneka. Haracyakoreshwa inzira nyamukuru.",
+    "continueToVehicle": "Komeza mu guhitamo ikirere",
+    "selectVehicle": "Hitamo ikirere",
+    "noVehicles": "Nta binyabiziga biboneka kuri iyi nzira. Ushobora gukomeza utahitamo ikirere.",
+    "continueWithoutVehicle": "Komeza udafite ikirere",
+    "driver": "Umushoferi",
+    "capacity": "Ubushobozi",
+    "seats": "imyanya",
+    "skipVehicle": "Simbuka guhitamo ikirere",
+    "passengerDetails": "Amakuru y'Umugenzi",
+    "bookForMyself": "Fata tike kuri njye",
+    "passengerName": "Izina ry'umugenzi",
+    "passengerPhone": "Telefone y'umugenzi",
+    "passengerEmail": "Email y'umugenzi",
+    "travelDate": "Itariki y'urugendo",
+    "seatNumber": "Nomero y'icyicaro",
+    "totalFare": "Igiciro cyose",
+    "expectedDeparture": "Gusohoka Biteganyijwe",
+    "creating": "Birimo gukorwa...",
+    "createTicket": "Kora Tike",
+    "completePayment": "Koresha Kwishyura",
+    "ticketCreated": "Tike Yarakozwe",
+    "ticketId": "ID ya Tike",
+    "routeInfo": "Amakuru y'inzira",
+    "departure": "Gusohoka",
+    "passenger": "Umugenzi",
+    "amountToPay": "Amafaranga yo Kwishyura",
+    "mtnPhone": "Nomero ya MTN Mobile Money",
+    "paymentNote": "Shyiramo nomero ya MTN Mobile Money kugirango wishyure",
+    "payLater": "Kwishyura Nyuma",
+    "payNow": "Kwishyura Ubu (MTN Mobile Money)",
+    "processing": "Birimo gukorwa...",
+    "errors": {
+      "loadData": "Ntibyashobotse kubona inzira n'ibinyabiziga",
+      "requiredFields": "Izina n'telefone y'umugenzi ni ngombwa",
+      "createTicket": "Ntibyashobotse gukora tike",
+      "paymentPhone": "Shyiramo nomero ya MTN Mobile Money",
+      "paymentFailed": "Kwishyura byananiranye",
+      "loadVehicles": "Ntibyashobotse kubona ibinyabiziga"
+    },
+    "success": {
+      "payment": "✅ Kwishyura byagenze neza! ID y'urugendo: {{transactionId}}"
+    }
+  }
+}
+
+
+
+
