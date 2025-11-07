@@ -90,6 +90,8 @@ export const deleteRouteStop = (stopId) => api.delete(`/api/routes/stops/${stopI
 
 // ---------------- Passenger ----------------
 export const getPassengerTickets = (passengerId) => api.get(`/passenger/tickets/${passengerId}`);
+export const downloadTicketPdf = (ticketId) =>
+  api.get(`/passenger/tickets/${ticketId}/pdf`, { responseType: "blob" });
 export const getAllPassengerRoutes = () => api.get("/passenger/routes");
 export const getAllAvailableVehicles = () => api.get("/passenger/vehicles");
 export const getVehiclesForRoute = (routeId) => api.get(`/passenger/vehicles/route/${routeId}`);

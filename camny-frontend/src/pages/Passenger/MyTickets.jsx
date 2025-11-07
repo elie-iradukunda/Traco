@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { getPassengerTickets, getUserNotifications } from "../../services/api";
+import { getPassengerTickets, getUserNotifications, downloadTicketPdf } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import LogoutButton from "../../components/LogoutButton";
@@ -39,6 +39,24 @@ const MyTickets = () => {
       console.error("Error loading tickets:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadPdf = async (ticket) => {
+    try {
+      const response = await downloadTicketPdf(ticket.ticket_id);
+      const blob = new Blob([response.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `ticket-${ticket.ticket_id}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Error downloading ticket PDF:", err);
+      alert("Unable to download ticket right now. Please try again later.");
     }
   };
 
@@ -250,6 +268,12 @@ const MyTickets = () => {
                       <p className="text-blue-800 font-semibold text-sm">✅ Boarding Confirmed</p>
                     </div>
                   )}
+                  <button
+                    onClick={() => handleDownloadPdf(ticket)}
+                    className="w-full px-4 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors font-medium"
+                  >
+                    ⬇️ Download Ticket PDF
+                  </button>
                   <button
                     onClick={() => navigate(`/passenger/track/${ticket.ticket_id}`)}
                     className="w-full px-4 py-2 bg-gradient-to-r from-blue-600 to-green-600 text-white rounded-lg hover:from-blue-700 hover:to-green-700 transition-all duration-300 font-medium mt-2"

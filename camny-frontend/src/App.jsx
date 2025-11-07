@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter as Router, Routes, Route, Link, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
 // Auth context
 import { AuthProvider, useAuth } from "./context/AuthContext";
@@ -50,8 +50,8 @@ const App = () => {
     <ThemeProvider>
       <AuthProvider>
         <Router>
-        {/* Routes */}
-        <Routes>
+            {/* Routes */}
+            <Routes>
           {/* Public */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
@@ -202,14 +202,14 @@ const App = () => {
               />
 
           {/* Fallback */}
-          <Route path="*" element={<div className="p-4">Page not found</div>} />
-        </Routes>
-        
-        {/* Global Chatbot - Available on all pages */}
-        <Chatbot />
-      </Router>
-    </AuthProvider>
-    </ThemeProvider>
+              <Route path="*" element={<div className="p-4">Page not found</div>} />
+            </Routes>
+
+            {/* Global Tools */}
+            <Chatbot />
+          </Router>
+        </AuthProvider>
+      </ThemeProvider>
   );
 };
 
