@@ -201,6 +201,27 @@ const Dashboard = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              <div className="bg-gradient-to-br from-blue-600 to-sky-500 text-white rounded-xl shadow-lg p-6 hover:shadow-xl transition duration-300">
+                <div className="flex justify-between items-center mb-4 border-b border-white border-opacity-20 pb-2">
+                  <h4 className="text-lg font-semibold">Live GPS Tracking</h4>
+                  <button
+                    onClick={() => navigate("/admin/live-tracking")}
+                    className="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-3 py-1.5 text-sm font-medium rounded-lg transition duration-200 shadow-md"
+                    title="Monitor live vehicles"
+                  >
+                    Open Map
+                  </button>
+                </div>
+                <p className="text-sm text-white opacity-90 mb-2">
+                  Watch every vehicle in motion and track route progress in real-time.
+                </p>
+                <button
+                  onClick={() => navigate("/admin/live-tracking")}
+                  className="w-full mt-4 px-4 py-2 bg-white text-blue-600 rounded-lg hover:bg-gray-100 font-medium transition-colors"
+                >
+                  📡 View Live Fleet →
+                </button>
+              </div>
               
               {/* Revenue Analytics Card */}
               <div className="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl shadow-lg p-6 hover:shadow-xl transition duration-300">

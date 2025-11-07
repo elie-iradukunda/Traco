@@ -1,5 +1,172 @@
 import { pool } from "../db.js";
 
+const ROLE_CONTEXT_CONFIG = {
+  admin: {
+    general: {
+      message:
+        "🔐 Admin tip: You can manage routes, drivers, vehicles, and monitor KPIs from the admin dashboard. Jump into `/admin/dashboard` or head to `/admin/live-tracking` for fleet visibility.",
+      suggestions: [
+        "Open admin dashboard",
+        "Show live tracking",
+        "How do I manage drivers?",
+      ],
+    },
+    routes: {
+      message:
+        "🗺️ Admin insight: Use the Manage Routes page to adjust schedules, assign vehicles, and notify drivers instantly.",
+      suggestions: [
+        "Open Manage Routes",
+        "Assign a driver to a route",
+      ],
+    },
+    booking: {
+      message:
+        "🎫 Admin reminder: Review and resend tickets from the All Tickets page if passengers need help.",
+      suggestions: [
+        "View all tickets",
+        "How to refund a ticket?",
+      ],
+    },
+    payments: {
+      message:
+        "💳 Admin note: Reconcile MTN Mobile Money transactions from Revenue Analytics to keep finance aligned.",
+      suggestions: ["Open Revenue Analytics"],
+    },
+    loyalty: {
+      message:
+        "⭐ Admin heads-up: Adjust reward tiers or manually credit points from the loyalty tools if necessary.",
+      suggestions: ["View loyalty dashboard"],
+    },
+    tracking: {
+      message:
+        "📡 Admin shortcut: Monitor every vehicle in real time from `/admin/live-tracking` and filter by route to spot delays fast.",
+      suggestions: ["Show live tracking", "How to notify a driver?"],
+    },
+    support: {
+      message:
+        "🤝 Admin workflow: Log passenger issues in the admin portal so operations can follow up promptly.",
+      suggestions: ["Log a passenger issue"],
+    },
+  },
+  driver: {
+    general: {
+      message:
+        "🚘 Driver tip: Open your Driver Dashboard for assignments and enable auto GPS tracking once you start a journey.",
+      suggestions: [
+        "Open driver dashboard",
+        "How do I start a journey?",
+      ],
+    },
+    routes: {
+      message:
+        "🛣️ Driver reminder: Check the Journey tab to confirm your route details and passenger list before departure.",
+      suggestions: ["Show my assignments", "View passenger list"],
+    },
+    booking: {
+      message:
+        "🎫 Driver note: Use the QR scanner in your dashboard to validate tickets and confirm boarding.",
+      suggestions: ["How to scan a ticket?"],
+    },
+    payments: {
+      message:
+        "💵 Driver info: Confirm passengers have a completed MTN Mobile Money payment before boarding when in doubt.",
+      suggestions: ["How to verify payment?"],
+    },
+    loyalty: {
+      message:
+        "⭐ Driver reminder: Mention loyalty rewards—every validated trip boosts passenger points.",
+      suggestions: ["Explain loyalty to passenger"],
+    },
+    tracking: {
+      message:
+        "📡 Driver checklist: Start automatic GPS tracking from the Journey tab so dispatch and passengers can follow your bus.",
+      suggestions: ["How do I enable GPS?"],
+    },
+    support: {
+      message:
+        "🆘 Driver support: Contact dispatch via the hotline or in-app tools if you run into issues on route.",
+      suggestions: ["Call dispatch"],
+    },
+  },
+  passenger: {
+    general: {
+      message:
+        "🧭 Passenger tip: Visit `My Tickets` to track your vehicle live, access QR codes, and manage bookings in one place.",
+      suggestions: [
+        "Open My Tickets",
+        "How do I track my vehicle?",
+      ],
+    },
+    routes: {
+      message:
+        "🚌 Passenger hint: After finding a route you like, tap Book Ticket to secure your seat and pay with MTN Mobile Money.",
+      suggestions: ["Book a ticket", "See vehicle availability"],
+    },
+    booking: {
+      message:
+        "🎫 Passenger reminder: Your QR code lives in My Tickets—show it to the driver when boarding.",
+      suggestions: ["View my tickets", "Payment methods"],
+    },
+    payments: {
+      message:
+        "💳 Passenger info: Pay securely with MTN Mobile Money and earn loyalty points for every journey.",
+      suggestions: ["Check my loyalty points"],
+    },
+    loyalty: {
+      message:
+        "⭐ Passenger perk: Track and redeem loyalty points from your dashboard; higher tiers unlock more rewards.",
+      suggestions: ["How to redeem points?"],
+    },
+    tracking: {
+      message:
+        "📍 Passenger hint: Use the Track Vehicle button on active tickets to view the live map and ETA.",
+      suggestions: ["Track my vehicle"],
+    },
+    support: {
+      message:
+        "☎️ Passenger help: If you need assistance, use the support contacts listed in the app or ask me here.",
+      suggestions: ["Contact support"],
+    },
+  },
+};
+
+const appendUniqueSuggestions = (base = [], extras = []) => {
+  const existing = new Set(base.map((item) => item.toLowerCase()));
+  extras.forEach((item) => {
+    if (!existing.has(item.toLowerCase())) {
+      base.push(item);
+      existing.add(item.toLowerCase());
+    }
+  });
+  return base;
+};
+
+const applyRoleContext = (role, topic, response, suggestions) => {
+  if (!role) {
+    return { response, suggestions };
+  }
+
+  const roleConfig = ROLE_CONTEXT_CONFIG[role];
+  if (!roleConfig) {
+    return { response, suggestions };
+  }
+
+  const context = roleConfig[topic] || roleConfig.general;
+  if (!context) {
+    return { response, suggestions };
+  }
+
+  const enhancedResponse = `${response}
+
+${context.message}`;
+  const enhancedSuggestions = appendUniqueSuggestions([...(suggestions || [])], context.suggestions || []);
+
+  return {
+    response: enhancedResponse,
+    suggestions: enhancedSuggestions,
+  };
+};
+
 // AI Chatbot that understands platform-specific queries
 export const chatWithBot = async (req, res) => {
   try {
@@ -12,9 +179,11 @@ export const chatWithBot = async (req, res) => {
     const userMessage = message.toLowerCase().trim();
     let response = "";
     let suggestions = [];
+    let contextTopic = "general";
 
     // Route Information Queries
     if (userMessage.includes("route") || userMessage.includes("bus") || userMessage.includes("schedule")) {
+      contextTopic = "routes";
       if (userMessage.includes("list") || userMessage.includes("show") || userMessage.includes("all")) {
         const routes = await pool.query(`
           SELECT route_name, start_location, end_location, fare_base, expected_start_time
@@ -76,6 +245,7 @@ export const chatWithBot = async (req, res) => {
     }
     // Ticket Booking Queries
     else if (userMessage.includes("book") || userMessage.includes("ticket") || userMessage.includes("buy")) {
+      contextTopic = "booking";
       if (userMessage.includes("how") || userMessage.includes("process") || userMessage.includes("steps")) {
         response = "Here's how to book a ticket:\n\n";
         response += "1. Browse available routes from the 'Browse Routes' page\n";
@@ -105,6 +275,7 @@ export const chatWithBot = async (req, res) => {
     }
     // Payment Queries
     else if (userMessage.includes("payment") || userMessage.includes("pay") || userMessage.includes("money") || userMessage.includes("mtn")) {
+      contextTopic = "payments";
       response = "Payment Information:\n\n";
       response += "💰 Payment Methods:\n";
       response += "• MTN Mobile Money (Rwanda)\n";
@@ -119,6 +290,7 @@ export const chatWithBot = async (req, res) => {
     }
     // Loyalty Points Queries
     else if (userMessage.includes("loyalty") || userMessage.includes("points") || userMessage.includes("reward")) {
+      contextTopic = "loyalty";
       if (user_id) {
         try {
           const loyaltyCheck = await pool.query(`
@@ -174,6 +346,7 @@ export const chatWithBot = async (req, res) => {
     }
     // Account/Profile Queries
     else if (userMessage.includes("account") || userMessage.includes("profile") || userMessage.includes("settings")) {
+      contextTopic = "general";
       response = "Account Management:\n\n";
       response += "📱 Your Profile:\n";
       response += "• View and update your information in the dashboard\n";
@@ -193,6 +366,7 @@ export const chatWithBot = async (req, res) => {
     }
     // Tracking Queries
     else if (userMessage.includes("track") || userMessage.includes("location") || userMessage.includes("where")) {
+      contextTopic = "tracking";
       response = "Vehicle Tracking:\n\n";
       response += "📍 How to Track:\n";
       response += "1. Go to 'My Tickets' in your dashboard\n";
@@ -207,6 +381,7 @@ export const chatWithBot = async (req, res) => {
     }
     // Help/Support Queries
     else if (userMessage.includes("help") || userMessage.includes("support") || userMessage.includes("contact")) {
+      contextTopic = "support";
       response = "How can I help you?\n\n";
       response += "I can assist you with:\n";
       response += "• 📍 Finding routes and schedules\n";
@@ -220,6 +395,7 @@ export const chatWithBot = async (req, res) => {
     }
     // Greetings
     else if (userMessage.includes("hello") || userMessage.includes("hi") || userMessage.includes("hey") || userMessage.startsWith("h")) {
+      contextTopic = "general";
       response = "Hello! 👋 Welcome to Camny Transport!\n\n";
       response += "I'm here to help you with:\n";
       response += "• Finding routes\n";
@@ -232,6 +408,7 @@ export const chatWithBot = async (req, res) => {
     }
     // Default response
     else {
+      contextTopic = "general";
       response = "I'm here to help! I can assist you with:\n\n";
       response += "🔍 Route Information\n";
       response += "🎫 Ticket Booking\n";
@@ -246,6 +423,8 @@ export const chatWithBot = async (req, res) => {
       response += "• 'Tell me about loyalty points'";
       suggestions = ["Show routes", "How to book?", "Payment info", "Help"];
     }
+
+    ({ response, suggestions } = applyRoleContext(user_role, contextTopic, response, suggestions));
 
     // Add timestamp
     const timestamp = new Date().toISOString();

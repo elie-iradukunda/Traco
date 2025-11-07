@@ -22,6 +22,7 @@ import Passengers from "./pages/Admin/Passengers";
 import DriverAssignments from "./pages/Admin/DriverAssignments";
 import AllTickets from "./pages/Admin/AllTickets";
 import RevenueAnalytics from "./pages/Admin/RevenueAnalytics";
+import LiveTracking from "./pages/Admin/LiveTracking";
 
 // Driver Pages
 import DriverDashboard from "./pages/Driver/DriverDashboard";
@@ -128,6 +129,14 @@ const App = () => {
               element={
                 <PrivateRoute roles={["admin"]}>
                   <RevenueAnalytics />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/admin/live-tracking"
+              element={
+                <PrivateRoute roles={["admin"]}>
+                  <LiveTracking />
                 </PrivateRoute>
               }
             />

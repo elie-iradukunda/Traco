@@ -2,23 +2,72 @@ import React, { useState, useEffect, useRef } from "react";
 import { chatWithBot } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 
+const getInitialGreeting = (user) => {
+  const firstName = user?.full_name?.split(" ")[0] || null;
+  const salutation = firstName ? `Hello, ${firstName}!` : "Hello!";
+  const base = `${salutation} 👋 I'm your Camny Transport assistant. How can I help you today?`;
+
+  switch (user?.role) {
+    case "admin":
+      return (
+        `${base}\nYou're logged in as an admin. Ask me about live fleet tracking, driver assignments, or passenger issues.`
+      );
+    case "driver":
+      return (
+        `${base}\nDriver tip: Open your dashboard to see assignments, scan tickets, and enable GPS tracking.`
+      );
+    case "passenger":
+      return (
+        `${base}\nNeed help tracking your bus or booking a ticket? Just let me know!`
+      );
+    default:
+      return base;
+  }
+};
+
+const getInitialSuggestions = (role) => {
+  switch (role) {
+    case "admin":
+      return [
+        "Show live tracking",
+        "How do I manage drivers?",
+        "View revenue analytics",
+      ];
+    case "driver":
+      return [
+        "Show my assignments",
+        "How do I enable GPS?",
+        "Scan a ticket",
+      ];
+    case "passenger":
+      return [
+        "Show available routes",
+        "Track my vehicle",
+        "Payment methods",
+      ];
+    default:
+      return [
+        "Show all routes",
+        "How to book a ticket?",
+        "Payment methods",
+      ];
+  }
+};
+
 const Chatbot = () => {
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([
+  const [messages, setMessages] = useState(() => [
     {
-      text: "Hello! 👋 I'm your Camny Transport assistant. How can I help you today?",
+      text: getInitialGreeting(user),
       sender: "bot",
       timestamp: new Date().toISOString()
     }
   ]);
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [suggestions, setSuggestions] = useState([
-    "Show all routes",
-    "How to book a ticket?",
-    "Payment methods"
-  ]);
+  const [suggestions, setSuggestions] = useState(() => getInitialSuggestions(user?.role));
+  const [hasUserInteracted, setHasUserInteracted] = useState(false);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -36,9 +85,32 @@ const Chatbot = () => {
     }
   }, [isOpen]);
 
+  useEffect(() => {
+    if (hasUserInteracted) return;
+
+    setMessages((prev) => {
+      if (!prev.length || prev[0].sender !== "bot") {
+        return prev;
+      }
+      const updatedGreeting = getInitialGreeting(user);
+      if (prev[0].text === updatedGreeting) {
+        return prev;
+      }
+      const next = [...prev];
+      next[0] = { ...prev[0], text: updatedGreeting };
+      return next;
+    });
+
+    setSuggestions(getInitialSuggestions(user?.role));
+  }, [user, hasUserInteracted]);
+
   const handleSendMessage = async (messageText = null) => {
     const text = messageText || inputMessage.trim();
     if (!text) return;
+
+    if (!hasUserInteracted) {
+      setHasUserInteracted(true);
+    }
 
     // Add user message
     const userMessage = {
@@ -90,6 +162,9 @@ const Chatbot = () => {
   };
 
   const handleSuggestionClick = (suggestion) => {
+    if (!hasUserInteracted) {
+      setHasUserInteracted(true);
+    }
     handleSendMessage(suggestion);
   };
 

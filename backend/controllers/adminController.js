@@ -465,47 +465,88 @@ export const deleteVehicle = async (req, res) => {
 
 export const assignDriverToVehicle = async (req, res) => {
   const { vehicleId } = req.params;
-  const { driver_id } = req.body;
+  let { driver_id } = req.body;
 
-  if (!driver_id) return res.status(400).json({ error: "Driver ID is required" });
+  if (!driver_id) {
+    return res.status(400).json({ error: "Driver ID is required" });
+  }
+
+  // Ensure integers for comparisons
+  driver_id = parseInt(driver_id, 10);
+  if (Number.isNaN(driver_id)) {
+    return res.status(400).json({ error: "Driver ID must be a number" });
+  }
 
   try {
-    // Get vehicle & driver info
+    // Fetch vehicle state
     const vehicleRes = await pool.query(
-      `SELECT vehicle_id, assigned_route FROM vehicles WHERE vehicle_id=$1`,
+      `SELECT vehicle_id, assigned_route, assigned_driver FROM vehicles WHERE vehicle_id = $1`,
       [vehicleId]
     );
     const vehicle = vehicleRes.rows[0];
-    if (!vehicle) return res.status(404).json({ error: "Vehicle not found" });
+    if (!vehicle) {
+      return res.status(404).json({ error: "Vehicle not found" });
+    }
 
-    // Assign driver to vehicle
+    const currentDriverId = vehicle.assigned_driver ? parseInt(vehicle.assigned_driver, 10) : null;
+
+    if (currentDriverId) {
+      if (currentDriverId === driver_id) {
+        return res.status(400).json({ error: "This driver is already assigned to the selected vehicle" });
+      }
+      return res.status(400).json({ error: "Vehicle is already assigned to another driver. Unassign it first." });
+    }
+
+    // Ensure driver isn't already assigned elsewhere
+    const driverVehicleCheck = await pool.query(
+      `SELECT vehicle_id FROM vehicles WHERE assigned_driver = $1 LIMIT 1`,
+      [driver_id]
+    );
+
+    if (driverVehicleCheck.rows.length > 0) {
+      const existingVehicleId = driverVehicleCheck.rows[0].vehicle_id;
+      if (parseInt(existingVehicleId, 10) !== parseInt(vehicleId, 10)) {
+        return res.status(400).json({ error: "Driver is already assigned to another vehicle" });
+      }
+      return res.status(400).json({ error: "Driver is already attached to this vehicle" });
+    }
+
+    await pool.query(`BEGIN`);
+
     await pool.query(
-      `UPDATE vehicles SET assigned_driver=$1 WHERE vehicle_id=$2`,
+      `UPDATE vehicles SET assigned_driver = $1 WHERE vehicle_id = $2`,
       [driver_id, vehicleId]
     );
 
-    // If vehicle has a route, assign driver to that route (update drivers.assigned_line_id)
     if (vehicle.assigned_route) {
       await pool.query(
-        `UPDATE drivers SET assigned_line_id=$1 WHERE driver_id=$2`,
+        `UPDATE drivers SET assigned_line_id = $1 WHERE driver_id = $2`,
         [vehicle.assigned_route, driver_id]
       );
     }
 
-    // Notification
     const userRes = await pool.query(
-      `SELECT user_id FROM drivers WHERE driver_id=$1`,
+      `SELECT user_id FROM drivers WHERE driver_id = $1`,
       [driver_id]
     );
-    await pool.query(
-      `INSERT INTO notifications (user_id, message) VALUES ($1, $2)`,
-      [userRes.rows[0].user_id, `You have been assigned to vehicle ID ${vehicleId}`]
-    );
+
+    if (userRes.rows.length > 0 && userRes.rows[0].user_id) {
+      await pool.query(
+        `INSERT INTO notifications (user_id, message, title) VALUES ($1, $2, $3)`,
+        [
+          userRes.rows[0].user_id,
+          `You have been assigned to vehicle ID ${vehicleId}`,
+          "Vehicle Assignment",
+        ]
+      );
+    }
+
+    await pool.query(`COMMIT`);
 
     res.status(200).json({ message: "Driver assigned to vehicle successfully" });
-
   } catch (err) {
-    console.error(err);
+    await pool.query(`ROLLBACK`).catch(() => null);
+    console.error("Error assigning driver to vehicle:", err);
     res.status(500).json({ error: "Failed to assign driver to vehicle" });
   }
 };

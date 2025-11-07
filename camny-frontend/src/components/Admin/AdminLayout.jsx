@@ -9,6 +9,7 @@ const AdminLayout = ({ children }) => {
   const navLinks = [
     { path: "/admin/dashboard", label: "Dashboard" },
     { path: "/admin/revenue-analytics", label: "Analytics" },
+    { path: "/admin/live-tracking", label: "Live Tracking" },
     { path: "/admin/manage-drivers", label: "Drivers" },
     { path: "/admin/register-driver", label: "Register Driver" },
     { path: "/admin/manage-routes", label: "Routes" },
