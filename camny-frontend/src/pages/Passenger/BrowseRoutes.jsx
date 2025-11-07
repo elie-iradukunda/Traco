@@ -3,8 +3,11 @@ import { getAllPassengerRoutes, bookTicket } from "../../services/api";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import LogoutButton from "../../components/LogoutButton";
+import { useTranslation } from "react-i18next";
+import "../../i18n"; // ensure i18n is initialized
 
 const BrowseRoutes = () => {
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
   const [routes, setRoutes] = useState([]);
@@ -27,14 +30,14 @@ const BrowseRoutes = () => {
       setRoutes(res.data || []);
     } catch (err) {
       console.error("Error loading routes:", err);
-      setMessage("Failed to load routes");
+      setMessage(t("browseRoutes.errors.loadRoutes"));
     } finally {
       setLoading(false);
     }
   };
 
   const handleBookTicket = async (route) => {
-    if (!window.confirm(`Book ticket for ${route.route_name}?`)) return;
+    if (!window.confirm(t("browseRoutes.confirmBook", { routeName: route.route_name }))) return;
 
     try {
       const res = await bookTicket({
@@ -43,14 +46,14 @@ const BrowseRoutes = () => {
         status: "confirmed",
       });
 
-      setMessage(`✅ Ticket booked successfully! Ticket ID: ${res.data.ticket.ticket_id}`);
+      setMessage(t("browseRoutes.success.book", { ticketId: res.data.ticket.ticket_id }));
       setTimeout(() => {
         setMessage("");
         navigate("/passenger/tickets");
       }, 2000);
     } catch (err) {
       console.error("Booking error:", err);
-      setMessage(err.response?.data?.error || "Failed to book ticket");
+      setMessage(err.response?.data?.error || t("browseRoutes.errors.book"));
     }
   };
 
@@ -63,25 +66,25 @@ const BrowseRoutes = () => {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-4xl font-extrabold text-gray-900 mb-2">
-              Browse Routes
+              {t("browseRoutes.title")}
             </h1>
-            <p className="text-gray-600">Find and book your next journey</p>
+            <p className="text-gray-600">{t("browseRoutes.subtitle")}</p>
           </div>
           <div className="flex gap-4 items-center">
-                <button
-                  onClick={() => navigate("/passenger/dashboard")}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
-                >
-                  Dashboard
-                </button>
-                <button
-                  onClick={() => navigate("/passenger/tickets")}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  My Tickets
-                </button>
-                <LogoutButton />
-              </div>
+            <button
+              onClick={() => navigate("/passenger/dashboard")}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+            >
+              {t("common.dashboard")}
+            </button>
+            <button
+              onClick={() => navigate("/passenger/tickets")}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              {t("common.myTickets")}
+            </button>
+            <LogoutButton />
+          </div>
         </div>
 
         {message && (
@@ -98,11 +101,11 @@ const BrowseRoutes = () => {
 
         {loading ? (
           <div className="flex justify-center items-center h-64">
-            <div className="text-xl text-gray-500">Loading routes...</div>
+            <div className="text-xl text-gray-500">{t("browseRoutes.loading")}</div>
           </div>
         ) : routes.length === 0 ? (
           <div className="text-center py-12">
-            <p className="text-xl text-gray-500">No routes available at the moment</p>
+            <p className="text-xl text-gray-500">{t("browseRoutes.noRoutes")}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -126,22 +129,22 @@ const BrowseRoutes = () => {
 
                 <div className="space-y-2 mb-6">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Distance:</span>
+                    <span className="text-gray-600">{t("browseRoutes.distance")}:</span>
                     <span className="font-semibold">{route.distance_km || "N/A"} km</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Duration:</span>
+                    <span className="text-gray-600">{t("browseRoutes.duration")}:</span>
                     <span className="font-semibold">{route.estimated_duration || "N/A"}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Fare:</span>
+                    <span className="text-gray-600">{t("browseRoutes.fare")}:</span>
                     <span className="font-bold text-green-600 text-lg">
                       {route.fare_base || 0} RWF
                     </span>
                   </div>
                   {route.expected_start_time && (
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Departure Time:</span>
+                      <span className="text-gray-600">{t("browseRoutes.departureTime")}:</span>
                       <span className="font-semibold text-blue-600">
                         {new Date(route.expected_start_time).toLocaleString()}
                       </span>
@@ -149,7 +152,7 @@ const BrowseRoutes = () => {
                   )}
                   {route.status && (
                     <div className="flex justify-between">
-                      <span className="text-gray-600">Status:</span>
+                      <span className="text-gray-600">{t("browseRoutes.status")}:</span>
                       <span
                         className={`px-2 py-1 rounded-full text-xs font-semibold ${
                           route.status === "active"
@@ -168,12 +171,12 @@ const BrowseRoutes = () => {
                     onClick={() => navigate("/passenger/book", { state: { route } })}
                     className="w-full bg-gradient-to-r from-blue-600 to-green-600 text-white py-3 rounded-lg font-semibold hover:from-blue-700 hover:to-green-700 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
                   >
-                    Book Ticket
+                    {t("browseRoutes.bookTicket")}
                   </button>
                 ) : (
                   <div className="w-full bg-yellow-50 border-2 border-yellow-300 py-3 rounded-lg text-center">
-                    <p className="text-yellow-800 font-semibold">⚠️ No vehicle assigned</p>
-                    <p className="text-xs text-yellow-600 mt-1">Please contact admin</p>
+                    <p className="text-yellow-800 font-semibold">{t("browseRoutes.noVehicleWarning")}</p>
+                    <p className="text-xs text-yellow-600 mt-1">{t("browseRoutes.contactAdmin")}</p>
                   </div>
                 )}
               </div>
