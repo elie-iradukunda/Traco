@@ -971,3 +971,102 @@ export const getStats = async (req, res) => {
     res.status(500).json({ error: "Failed to fetch stats" });
   }
 };
+
+// ------------------- REVENUE ANALYTICS -------------------
+export const getRevenueAnalytics = async (req, res) => {
+  try {
+    const { period = '30' } = req.query; // days
+    
+    // Total revenue
+    const totalRevenue = await pool.query(`
+      SELECT 
+        COALESCE(SUM(COALESCE(calculated_fare, amount_paid, 0)), 0) AS total_revenue,
+        COUNT(*) AS total_tickets,
+        COUNT(CASE WHEN payment_status = 'completed' THEN 1 END) AS paid_tickets,
+        COUNT(CASE WHEN payment_status = 'pending' THEN 1 END) AS pending_tickets
+      FROM tickets
+      WHERE created_at >= NOW() - INTERVAL '${parseInt(period)} days'
+    `);
+
+    // Revenue by day
+    const revenueByDay = await pool.query(`
+      SELECT 
+        DATE(created_at) AS date,
+        COALESCE(SUM(COALESCE(calculated_fare, amount_paid, 0)), 0) AS revenue,
+        COUNT(*) AS ticket_count
+      FROM tickets
+      WHERE created_at >= NOW() - INTERVAL '${parseInt(period)} days'
+        AND payment_status = 'completed'
+      GROUP BY DATE(created_at)
+      ORDER BY date ASC
+    `);
+
+    // Revenue by route
+    const revenueByRoute = await pool.query(`
+      SELECT 
+        r.route_id,
+        r.route_name,
+        r.start_location,
+        r.end_location,
+        COALESCE(SUM(COALESCE(t.calculated_fare, t.amount_paid, 0)), 0) AS revenue,
+        COUNT(t.ticket_id) AS ticket_count
+      FROM routes r
+      LEFT JOIN tickets t ON r.route_id = t.route_id
+        AND t.created_at >= NOW() - INTERVAL '${parseInt(period)} days'
+        AND t.payment_status = 'completed'
+      GROUP BY r.route_id, r.route_name, r.start_location, r.end_location
+      ORDER BY revenue DESC
+      LIMIT 10
+    `);
+
+    // Revenue by month
+    const revenueByMonth = await pool.query(`
+      SELECT 
+        TO_CHAR(created_at, 'YYYY-MM') AS month,
+        COALESCE(SUM(COALESCE(calculated_fare, amount_paid, 0)), 0) AS revenue,
+        COUNT(*) AS ticket_count
+      FROM tickets
+      WHERE created_at >= NOW() - INTERVAL '12 months'
+        AND payment_status = 'completed'
+      GROUP BY TO_CHAR(created_at, 'YYYY-MM')
+      ORDER BY month ASC
+    `);
+
+    res.status(200).json({
+      total: totalRevenue.rows[0],
+      byDay: revenueByDay.rows,
+      byRoute: revenueByRoute.rows,
+      byMonth: revenueByMonth.rows
+    });
+  } catch (err) {
+    console.error("Error fetching revenue analytics:", err);
+    res.status(500).json({ error: "Failed to fetch revenue analytics", details: err.message });
+  }
+};
+
+// ------------------- ROUTE PERFORMANCE -------------------
+export const getRoutePerformance = async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT 
+        r.route_id,
+        r.route_name,
+        r.start_location,
+        r.end_location,
+        COUNT(t.ticket_id) AS total_tickets,
+        COUNT(CASE WHEN t.payment_status = 'completed' THEN 1 END) AS completed_tickets,
+        COALESCE(SUM(CASE WHEN t.payment_status = 'completed' THEN COALESCE(t.calculated_fare, t.amount_paid, 0) ELSE 0 END), 0) AS revenue,
+        AVG(CASE WHEN t.payment_status = 'completed' THEN COALESCE(t.calculated_fare, t.amount_paid, 0) ELSE NULL END) AS avg_fare,
+        COUNT(DISTINCT t.passenger_id) AS unique_passengers
+      FROM routes r
+      LEFT JOIN tickets t ON r.route_id = t.route_id
+      WHERE t.created_at >= NOW() - INTERVAL '30 days' OR t.ticket_id IS NULL
+      GROUP BY r.route_id, r.route_name, r.start_location, r.end_location
+      ORDER BY revenue DESC
+    `);
+    res.status(200).json(result.rows);
+  } catch (err) {
+    console.error("Error fetching route performance:", err);
+    res.status(500).json({ error: "Failed to fetch route performance", details: err.message });
+  }
+};

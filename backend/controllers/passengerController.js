@@ -572,6 +572,66 @@ export const processPayment = async (req, res) => {
       );
     }
 
+    // Award loyalty points (1 point per 100 RWF spent)
+    try {
+      const fareAmount = parseFloat(ticket.amount_paid || ticket.fare_base || 0);
+      const pointsToAward = Math.floor(fareAmount / 100);
+      
+      if (pointsToAward > 0) {
+        // Check if loyalty_points table exists
+        const loyaltyCheck = await pool.query(`
+          SELECT EXISTS (
+            SELECT FROM information_schema.tables 
+            WHERE table_name = 'loyalty_points'
+          )
+        `);
+
+        if (loyaltyCheck.rows[0]?.exists) {
+          // Ensure loyalty record exists
+          await pool.query(`
+            INSERT INTO loyalty_points (passenger_id, total_points, available_points, tier)
+            VALUES ($1, $2, $2, 'bronze')
+            ON CONFLICT (passenger_id) DO NOTHING
+          `, [notificationUserId, 0]);
+
+          // Add points
+          await pool.query(
+            `UPDATE loyalty_points 
+             SET total_points = total_points + $1,
+                 available_points = available_points + $1,
+                 tier = CASE
+                   WHEN total_points + $1 >= 10000 THEN 'platinum'
+                   WHEN total_points + $1 >= 5000 THEN 'gold'
+                   WHEN total_points + $1 >= 1000 THEN 'silver'
+                   ELSE 'bronze'
+                 END,
+                 updated_at = CURRENT_TIMESTAMP
+             WHERE passenger_id = $2`,
+            [pointsToAward, notificationUserId]
+          );
+
+          // Log transaction
+          const transactionCheck = await pool.query(`
+            SELECT EXISTS (
+              SELECT FROM information_schema.tables 
+              WHERE table_name = 'loyalty_transactions'
+            )
+          `);
+
+          if (transactionCheck.rows[0]?.exists) {
+            await pool.query(
+              `INSERT INTO loyalty_transactions (passenger_id, points, type, reason)
+               VALUES ($1, $2, 'earned', $3)`,
+              [notificationUserId, pointsToAward, `Ticket payment: ${ticket.route_name}`]
+            );
+          }
+        }
+      }
+    } catch (loyaltyErr) {
+      console.log("Could not award loyalty points:", loyaltyErr.message);
+      // Don't fail the payment if loyalty points fail
+    }
+
     res.status(200).json({
       message: "Payment processed successfully",
       ticket: updatedTicket,

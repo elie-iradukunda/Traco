@@ -6,6 +6,7 @@ import {
   getAllDrivers,
   getAllRoutes,
   getAllVehicles,
+  getStats,
   // Keeping API delete functions as they are used directly on the dashboard
   deleteDriver,
   deleteRoute,
@@ -55,6 +56,7 @@ const Dashboard = () => {
   const [drivers, setDrivers] = useState([]);
   const [routes, setRoutes] = useState([]);
   const [vehicles, setVehicles] = useState([]);
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   
   // --- Data Loading Functionality (MAINTAINED) ---
@@ -63,14 +65,16 @@ const Dashboard = () => {
 
     setLoading(true);
     try {
-      const [dRes, rRes, vRes] = await Promise.all([
+      const [dRes, rRes, vRes, statsRes] = await Promise.all([
         getAllDrivers(),
         getAllRoutes(),
         getAllVehicles(),
+        getStats(),
       ]);
       setDrivers(dRes.data || []);
       setRoutes(rRes.data || []);
       setVehicles(vRes.data || []);
+      setStats(statsRes.data || null);
     } catch (err) {
       console.error("Error loading data:", err);
     } finally {
@@ -97,6 +101,14 @@ const Dashboard = () => {
   const handleNavigateToAddVehicle = () => {
     // Navigates to the page for managing/adding vehicles
     navigate("/admin/vehicles");
+  };
+
+  const handleNavigateToPassengers = () => {
+    navigate("/admin/passengers");
+  };
+
+  const handleNavigateToAssignments = () => {
+    navigate("/admin/driver-assignments");
   };
 
   // --- DELETE Functionality (MAINTAINED) ---
@@ -151,24 +163,30 @@ const Dashboard = () => {
         {/* --- */}
 
         {/* 📊 Stats Overview */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-10">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
           <StatCard
             title="Total Drivers"
-            count={drivers.length}
+            count={stats?.total_drivers || drivers.length}
             icon="🧑‍✈️"
             color="border-blue-500"
           />
           <StatCard
             title="Total Routes"
-            count={routes.length}
+            count={stats?.total_routes || routes.length}
             icon="🗺️"
             color="border-green-500"
           />
           <StatCard
             title="Total Vehicles"
-            count={vehicles.length}
+            count={stats?.total_vehicles || vehicles.length}
             icon="🚍"
             color="border-purple-500"
+          />
+          <StatCard
+            title="Total Tickets"
+            count={stats?.total_tickets || 0}
+            icon="🎫"
+            color="border-yellow-500"
           />
         </div>
 
@@ -182,7 +200,70 @@ const Dashboard = () => {
                 <p className="text-xl text-gray-500">Loading resources...</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+              
+              {/* Revenue Analytics Card */}
+              <div className="bg-gradient-to-br from-green-500 to-green-600 text-white rounded-xl shadow-lg p-6 hover:shadow-xl transition duration-300">
+                <div className="flex justify-between items-center mb-4 border-b border-white border-opacity-20 pb-2">
+                  <h4 className="text-lg font-semibold">Revenue Analytics</h4>
+                  <button
+                    onClick={() => navigate("/admin/revenue-analytics")}
+                    className="bg-white bg-opacity-20 hover:bg-opacity-30 text-white px-3 py-1.5 text-sm font-medium rounded-lg transition duration-200 shadow-md"
+                    title="View Revenue Analytics"
+                  >
+                    View Analytics
+                  </button>
+                </div>
+                <p className="text-sm text-white opacity-90 mb-2">Track revenue, performance metrics, and insights</p>
+                <button
+                  onClick={() => navigate("/admin/revenue-analytics")}
+                  className="w-full mt-4 px-4 py-2 bg-white text-green-600 rounded-lg hover:bg-gray-100 font-medium transition-colors"
+                >
+                  📊 View Analytics →
+                </button>
+              </div>
+
+              {/* Passengers Card */}
+              <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition duration-300">
+                <div className="flex justify-between items-center mb-4 border-b pb-2">
+                  <h4 className="text-lg font-semibold text-gray-700">Passengers</h4>
+                  <button
+                    onClick={handleNavigateToPassengers}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 text-sm font-medium rounded-lg transition duration-200 shadow-md"
+                    title="View All Passengers"
+                  >
+                    View All
+                  </button>
+                </div>
+                <p className="text-sm text-gray-600 mb-2">View all passengers who have purchased tickets</p>
+                <button
+                  onClick={handleNavigateToPassengers}
+                  className="w-full mt-4 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 font-medium"
+                >
+                  👥 View Passengers →
+                </button>
+              </div>
+
+              {/* Driver Assignments Card */}
+              <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition duration-300">
+                <div className="flex justify-between items-center mb-4 border-b pb-2">
+                  <h4 className="text-lg font-semibold text-gray-700">Driver Assignments</h4>
+                  <button
+                    onClick={handleNavigateToAssignments}
+                    className="bg-orange-600 hover:bg-orange-700 text-white px-3 py-1.5 text-sm font-medium rounded-lg transition duration-200 shadow-md"
+                    title="View All Assignments"
+                  >
+                    View All
+                  </button>
+                </div>
+                <p className="text-sm text-gray-600 mb-2">See drivers assigned to vehicles and routes</p>
+                <button
+                  onClick={handleNavigateToAssignments}
+                  className="w-full mt-4 px-4 py-2 bg-orange-100 text-orange-700 rounded-lg hover:bg-orange-200 font-medium"
+                >
+                  🚗 View Assignments →
+                </button>
+              </div>
               
               {/* Drivers Card - Uses Navigation */}
               <div className="bg-white rounded-xl shadow-lg p-6 hover:shadow-xl transition duration-300">

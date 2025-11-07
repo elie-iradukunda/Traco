@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import AdminLayout from "../../components/Admin/AdminLayout";
 import {
   getAllDrivers,
   getAllUsers,
@@ -21,7 +22,7 @@ const ManageDrivers = () => {
 
   const [newDriver, setNewDriver] = useState({
     user_id: "",
-    license_id: "",
+    license_number: "",
     status: "active",
   });
 
@@ -47,7 +48,17 @@ const ManageDrivers = () => {
   const fetchDrivers = async () => {
     try {
       const res = await getAllDrivers();
-      setDrivers(res.data || []);
+      const driversData = res.data || [];
+      
+      // Deduplicate drivers by driver_id (keep first occurrence)
+      const uniqueDrivers = driversData.reduce((acc, driver) => {
+        if (!acc.find(d => d.driver_id === driver.driver_id)) {
+          acc.push(driver);
+        }
+        return acc;
+      }, []);
+      
+      setDrivers(uniqueDrivers);
     } catch (err) {
       console.error(err);
     }
@@ -84,17 +95,28 @@ const ManageDrivers = () => {
     e.preventDefault();
     try {
       if (editMode && selectedDriver) {
-        await updateDriver(selectedDriver.driver_id, newDriver);
+        const updateData = {
+          license_number: newDriver.license_number,
+          status: newDriver.status,
+        };
+        await updateDriver(selectedDriver.driver_id, updateData);
+        alert("✅ Driver updated successfully!");
       } else {
-        await addDriver(newDriver);
+        const driverData = {
+          user_id: newDriver.user_id,
+          license_number: newDriver.license_number,
+          status: newDriver.status,
+        };
+        await addDriver(driverData);
+        alert("✅ Driver created successfully!");
       }
-      setNewDriver({ user_id: "", license_id: "", status: "active" });
+      setNewDriver({ user_id: "", license_number: "", status: "active" });
       setEditMode(false);
       setSelectedDriver(null);
       fetchDrivers();
     } catch (err) {
       console.error(err);
-      alert("Failed to create/update driver");
+      alert(err.response?.data?.error || "Failed to create/update driver");
     }
   };
 
@@ -114,7 +136,7 @@ const ManageDrivers = () => {
     setSelectedDriver(driver);
     setNewDriver({
       user_id: driver.user_id,
-      license_id: driver.license_id || driver.license_number || "",
+      license_number: driver.license_number || "",
       status: driver.status,
     });
   };
@@ -124,12 +146,12 @@ const ManageDrivers = () => {
     if (!vehicleId) return alert("Select a vehicle first!");
     try {
       await assignDriverToVehicle(vehicleId, driverId);
-      alert("Driver assigned to vehicle!");
+      alert("✅ Driver assigned to vehicle successfully!");
       setSelectedVehicle({ ...selectedVehicle, [driverId]: "" });
       fetchDrivers();
     } catch (err) {
       console.error(err);
-      alert("Failed to assign vehicle.");
+      alert(err.response?.data?.error || "Failed to assign vehicle.");
     }
   };
 
@@ -137,26 +159,36 @@ const ManageDrivers = () => {
     const routeId = selectedRoute[driverId];
     if (!routeId) return alert("Select a route first!");
     try {
+      const driver = drivers.find((d) => d.driver_id === driverId);
+      const driverUserId = driver?.user_id;
+      
       await assignDriverToRoute(routeId, driverId);
+      
       const route = routes.find((r) => r.route_id === parseInt(routeId));
-      if (route) {
-        await sendNotification({
-          user_id: driverId,
-          message: `You have been assigned to route: ${route.route_name}`
-        });
+      if (route && driverUserId) {
+        try {
+          await sendNotification({
+            user_id: driverUserId,
+            message: `You have been assigned to route: ${route.route_name}`,
+            title: "New Route Assignment"
+          });
+        } catch (notifErr) {
+          console.error("Notification error (non-critical):", notifErr);
+        }
       }
-      alert("Driver assigned to route!");
+      alert("✅ Driver assigned to route successfully!");
       setSelectedRoute({ ...selectedRoute, [driverId]: "" });
       fetchDrivers();
     } catch (err) {
       console.error(err);
-      alert("Failed to assign route.");
+      alert(err.response?.data?.error || "Failed to assign route.");
     }
   };
 
-  if (loading) return <div className="flex justify-center items-center h-screen">Loading...</div>;
+  if (loading) return <AdminLayout><div className="flex justify-center items-center h-screen">Loading...</div></AdminLayout>;
 
   return (
+    <AdminLayout>
     <div className="p-6 bg-gray-100 min-h-screen space-y-8">
       <h1 className="text-3xl font-bold text-gray-800">Manage Drivers</h1>
 
@@ -181,8 +213,8 @@ const ManageDrivers = () => {
         <input
           type="text"
           placeholder="License Number"
-          value={newDriver.license_id}
-          onChange={(e) => setNewDriver({ ...newDriver, license_id: e.target.value })}
+          value={newDriver.license_number}
+          onChange={(e) => setNewDriver({ ...newDriver, license_number: e.target.value })}
           className="border p-2 rounded-lg"
           required
         />
@@ -194,7 +226,7 @@ const ManageDrivers = () => {
 
         <div className="flex gap-4">
           <button type="submit" className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700">{editMode ? "Update Driver" : "Add Driver"}</button>
-          {editMode && <button type="button" onClick={() => { setEditMode(false); setSelectedDriver(null); setNewDriver({ user_id: "", license_id: "", status: "active" }); }}
+          {editMode && <button type="button" onClick={() => { setEditMode(false); setSelectedDriver(null); setNewDriver({ user_id: "", license_number: "", status: "active" }); }}
             className="flex-1 bg-gray-300 py-2 rounded-lg hover:bg-gray-400">Cancel</button>}
         </div>
       </form>
@@ -217,12 +249,12 @@ const ManageDrivers = () => {
               </tr>
             </thead>
             <tbody>
-              {drivers.length > 0 ? drivers.map((d) => (
-                <tr key={d.driver_id} className="hover:bg-gray-50">
+              {drivers.length > 0 ? drivers.map((d, index) => (
+                <tr key={`driver-${d.driver_id}-${d.user_id}-${index}`} className="hover:bg-gray-50">
                   <td className="p-3">{d.full_name || "N/A"}</td>
                   <td className="p-3">{d.email || "N/A"}</td>
                   <td className="p-3">{d.phone || "N/A"}</td>
-                  <td className="p-3">{d.license_id || "N/A"}</td>
+                  <td className="p-3">{d.license_number || "N/A"}</td>
                   <td className="p-3">{d.status?.toUpperCase() || "N/A"}</td>
 
                   {/* Vehicle */}
@@ -260,6 +292,7 @@ const ManageDrivers = () => {
         </div>
       </div>
     </div>
+    </AdminLayout>
   );
 };
 

@@ -3,10 +3,13 @@ import { BrowserRouter as Router, Routes, Route, Link, Navigate } from "react-ro
 
 // Auth context
 import { AuthProvider, useAuth } from "./context/AuthContext";
+// Theme context
+import { ThemeProvider } from "./context/ThemeContext";
 
 // Public Pages
 import LandingPage from "./pages/Public/LandingPage";
 import Login from "./pages/Public/Login";
+import Register from "./pages/Public/Register";
 
 // Admin Pages
 import Dashboard from "./pages/Admin/Dashboard";
@@ -15,6 +18,10 @@ import ManageRoutes from "./pages/Admin/ManageRoutes";
 import VehiclesPage from "./pages/Admin/Vehicles";
 import NotificationsAdmin from "./pages/Admin/Notifications";
 import RegisterDriver from "./pages/Admin/RegisterDriver";
+import Passengers from "./pages/Admin/Passengers";
+import DriverAssignments from "./pages/Admin/DriverAssignments";
+import AllTickets from "./pages/Admin/AllTickets";
+import RevenueAnalytics from "./pages/Admin/RevenueAnalytics";
 
 // Driver Pages
 import DriverDashboard from "./pages/Driver/DriverDashboard";
@@ -22,6 +29,12 @@ import DriverDashboard from "./pages/Driver/DriverDashboard";
 // Passenger Pages
 import BrowseRoutes from "./pages/Passenger/BrowseRoutes";
 import MyTickets from "./pages/Passenger/MyTickets";
+import BookTicket from "./pages/Passenger/BookTicket";
+import PassengerDashboard from "./pages/Passenger/Dashboard";
+import TrackVehicle from "./pages/Passenger/TrackVehicle";
+
+// Components
+import Chatbot from "./components/Chatbot/Chatbot";
 
 // PrivateRoute component
 const PrivateRoute = ({ children, roles }) => {
@@ -33,37 +46,15 @@ const PrivateRoute = ({ children, roles }) => {
 
 const App = () => {
   return (
-    <AuthProvider>
-      <Router>
-        <div className="p-4">
-          {/* Navigation */}
-          <nav className="mb-4 border-b pb-2 flex gap-2 flex-wrap">
-            <Link className="text-blue-600 hover:underline" to="/">Landing</Link>
-            <Link className="text-blue-600 hover:underline" to="/login">Login</Link>
-
-            {/* Admin Links */}
-            <Link className="text-blue-600 hover:underline" to="/admin/dashboard">Admin Dashboard</Link>
-            <Link className="text-blue-600 hover:underline" to="/admin/manage-drivers">Manage Drivers</Link>
-            <Link className="text-blue-600 hover:underline" to="/admin/manage-routes">Manage Routes</Link>
-            <Link className="text-blue-600 hover:underline" to="/admin/vehicles">Vehicles</Link>
-            <Link className="text-blue-600 hover:underline" to="/admin/notifications">Notifications</Link>
-
-
-           
-
-            {/* Driver Links */}
-            <Link className="text-blue-600 hover:underline" to="/driver/dashboard">Driver Dashboard</Link>
-
-            {/* Passenger Links */}
-            <Link className="text-blue-600 hover:underline" to="/passenger/browse">Browse Routes</Link>
-            <Link className="text-blue-600 hover:underline" to="/passenger/tickets">My Tickets</Link>
-          </nav>
-
-          {/* Routes */}
-          <Routes>
-            {/* Public */}
-            <Route path="/" element={<LandingPage />} />
-            <Route path="/login" element={<Login />} />
+    <ThemeProvider>
+      <AuthProvider>
+        <Router>
+        {/* Routes */}
+        <Routes>
+          {/* Public */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
 
             {/* Admin */}
             <Route
@@ -108,6 +99,38 @@ const App = () => {
                 </PrivateRoute>
               }
             />
+            <Route
+              path="/admin/passengers"
+              element={
+                <PrivateRoute roles={["admin"]}>
+                  <Passengers />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/admin/driver-assignments"
+              element={
+                <PrivateRoute roles={["admin"]}>
+                  <DriverAssignments />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/admin/all-tickets"
+              element={
+                <PrivateRoute roles={["admin"]}>
+                  <AllTickets />
+                </PrivateRoute>
+              }
+            />
+            <Route
+              path="/admin/revenue-analytics"
+              element={
+                <PrivateRoute roles={["admin"]}>
+                  <RevenueAnalytics />
+                </PrivateRoute>
+              }
+            />
 
             {/* Driver */}
             <Route
@@ -119,30 +142,65 @@ const App = () => {
               }
             />
 
-            {/* Passenger */}
-            <Route
-              path="/passenger/browse"
-              element={
-                <PrivateRoute roles={["passenger"]}>
-                  <BrowseRoutes />
-                </PrivateRoute>
-              }
-            />
-            <Route
-              path="/passenger/tickets"
-              element={
-                <PrivateRoute roles={["passenger"]}>
-                  <MyTickets />
-                </PrivateRoute>
-              }
-            />
+              {/* Passenger */}
+              <Route
+                path="/passenger/dashboard"
+                element={
+                  <PrivateRoute roles={["passenger"]}>
+                    <PassengerDashboard />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/passenger/browse"
+                element={
+                  <PrivateRoute roles={["passenger"]}>
+                    <BrowseRoutes />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/passenger/book"
+                element={
+                  <PrivateRoute roles={["passenger"]}>
+                    <BookTicket />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/passenger/tickets"
+                element={
+                  <PrivateRoute roles={["passenger"]}>
+                    <MyTickets />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/passenger/my-tickets"
+                element={
+                  <PrivateRoute roles={["passenger"]}>
+                    <MyTickets />
+                  </PrivateRoute>
+                }
+              />
+              <Route
+                path="/passenger/track/:ticketId"
+                element={
+                  <PrivateRoute roles={["passenger"]}>
+                    <TrackVehicle />
+                  </PrivateRoute>
+                }
+              />
 
-            {/* Fallback */}
-            <Route path="*" element={<div className="p-4">Page not found</div>} />
-          </Routes>
-        </div>
+          {/* Fallback */}
+          <Route path="*" element={<div className="p-4">Page not found</div>} />
+        </Routes>
+        
+        {/* Global Chatbot - Available on all pages */}
+        <Chatbot />
       </Router>
     </AuthProvider>
+    </ThemeProvider>
   );
 };
 

@@ -22,7 +22,9 @@ import {
   updateTicket,
   deleteTicket,
   getStats,
-  registerDriverUser
+  registerDriverUser,
+  getRevenueAnalytics,
+  getRoutePerformance
 } from "../controllers/adminController.js";
 
 import { authMiddleware, authorizeRole } from "../middleware/authMiddleware.js";
@@ -90,6 +92,8 @@ router.delete("/tickets/:id", authMiddleware, authorizeRole("admin"), deleteTick
 
 // ------------------- REPORTS / STATS -------------------
 router.get("/stats", authMiddleware, authorizeRole("admin"), getStats);
+router.get("/analytics/revenue", authMiddleware, authorizeRole("admin"), getRevenueAnalytics);
+router.get("/analytics/route-performance", authMiddleware, authorizeRole("admin"), getRoutePerformance);
 
 // ------------------- PASSENGERS & DRIVER ASSIGNMENTS -------------------
 router.get("/passengers", authMiddleware, authorizeRole("admin"), getAllPassengersWithTickets);

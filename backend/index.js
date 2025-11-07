@@ -11,6 +11,9 @@ import notificationRoutes from "./routes/notifications.js";
 import authRoutes from "./routes/authRoutes.js";
 import routeStopsRoutes from "./routes/routeStops.js";
 import trackingRoutes from "./routes/tracking.js";
+import reviewsRoutes from "./routes/reviews.js";
+import loyaltyRoutes from "./routes/loyalty.js";
+import chatbotRoutes from "./routes/chatbot.js";
 
 dotenv.config();
 
@@ -30,6 +33,9 @@ app.use("/public", publicRoutes);
 app.use("/notifications", notificationRoutes);
 app.use("/api", routeStopsRoutes);
 app.use("/api/tracking", trackingRoutes);
+app.use("/api/reviews", reviewsRoutes);
+app.use("/api/loyalty", loyaltyRoutes);
+app.use("/api/chatbot", chatbotRoutes);
 
 // ------------------- DEFAULT ROUTE -------------------
 app.get("/", (req, res) => res.send("Backend running"));

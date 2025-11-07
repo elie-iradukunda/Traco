@@ -75,9 +75,19 @@ const VehiclesPage = () => {
   };
 
   const handleAssign = (vehicleId, driverId) => {
-    assignDriverToVehicle(vehicleId, { driver_id: driverId })
-      .then(loadData)
-      .catch(console.error);
+    if (!driverId) {
+      alert("Please select a driver");
+      return;
+    }
+    assignDriverToVehicle(vehicleId, driverId)
+      .then(() => {
+        alert("Driver assigned successfully!");
+        loadData();
+      })
+      .catch((err) => {
+        console.error(err);
+        alert(err.response?.data?.error || "Failed to assign driver");
+      });
   };
 
   return (
