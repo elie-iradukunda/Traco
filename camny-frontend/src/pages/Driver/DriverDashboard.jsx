@@ -13,6 +13,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useNavigate } from "react-router-dom";
 import LogoutButton from "../../components/LogoutButton";
 import MapView from "../../components/Maps/MapView";
+import DarkModeToggle from "../../components/Common/DarkModeToggle";
 
 const DriverDashboard = () => {
   const { user } = useAuth();
@@ -371,41 +372,62 @@ const DriverDashboard = () => {
     alert("✅ Automatic GPS tracking started! Your location will be updated every time it changes.");
   };
 
-  const stopAutomaticGpsTracking = () => {
+  const stopAutomaticGpsTracking = async () => {
     if (gpsWatchId !== null) {
       navigator.geolocation.clearWatch(gpsWatchId);
       setGpsWatchId(null);
       setAutoGpsTracking(false);
-      alert("GPS tracking stopped");
+      
+      // Notify admin that GPS tracking has stopped
+      if (vehicle?.vehicle_id) {
+        try {
+          await updateVehicleLocation({
+            vehicle_id: vehicle.vehicle_id,
+            latitude: null,
+            longitude: null,
+            current_location: "GPS tracking stopped",
+            speed: null,
+            heading: null,
+            estimated_arrival: null
+          });
+        } catch (err) {
+          console.error("Error notifying admin about GPS stop:", err);
+        }
+      }
+      
+      alert("GPS tracking stopped. Admin has been notified.");
     }
   };
 
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-4xl font-extrabold text-gray-900 mb-2">
+            <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white mb-2">
               Driver Dashboard
             </h1>
-            <p className="text-gray-600">
+            <p className="text-gray-600 dark:text-gray-400">
               Welcome back, {user.full_name || "Driver"}!
             </p>
             {vehicle && (
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 Vehicle: {vehicle.plate_number}
               </p>
             )}
           </div>
-          <LogoutButton />
+          <div className="flex items-center gap-4">
+            <DarkModeToggle />
+            <LogoutButton />
+          </div>
         </div>
 
         {/* Tabs */}
-        <div className="bg-white rounded-xl shadow-lg mb-6 overflow-hidden">
-          <div className="flex border-b border-gray-200">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg mb-6 overflow-hidden">
+          <div className="flex border-b border-gray-200 dark:border-gray-700">
             {[
               { id: "assignments", label: "Assignments", icon: "📋" },
               { id: "passengers", label: "Passengers", icon: "👥" },
@@ -417,8 +439,8 @@ const DriverDashboard = () => {
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex-1 px-6 py-4 font-semibold transition-colors ${
                   activeTab === tab.id
-                    ? "bg-blue-600 text-white border-b-2 border-blue-600"
-                    : "text-gray-700 hover:bg-gray-100"
+                    ? "bg-blue-600 dark:bg-blue-700 text-white border-b-2 border-blue-600 dark:border-blue-700"
+                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                 }`}
               >
                 <span className="mr-2">{tab.icon}</span>
@@ -429,8 +451,8 @@ const DriverDashboard = () => {
         </div>
 
         {loading ? (
-          <div className="flex justify-center items-center h-64 bg-white rounded-xl shadow-lg">
-            <div className="text-xl text-gray-500">Loading...</div>
+          <div className="flex justify-center items-center h-64 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
+            <div className="text-xl text-gray-500 dark:text-gray-400">Loading...</div>
           </div>
         ) : (
           <>
@@ -438,44 +460,44 @@ const DriverDashboard = () => {
             {activeTab === "assignments" && (
               <div className="space-y-4">
                 {assignments.length === 0 ? (
-                  <div className="bg-white rounded-xl shadow-lg p-12 text-center">
+                  <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-12 text-center">
                     <div className="text-6xl mb-4">🚗</div>
-                    <h3 className="text-2xl font-bold text-gray-900 mb-2">No Assignments</h3>
-                    <p className="text-gray-600">You don't have any route assignments yet.</p>
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">No Assignments</h3>
+                    <p className="text-gray-600 dark:text-gray-400">You don't have any route assignments yet.</p>
                   </div>
                 ) : (
                   assignments.map((assignment) => (
                     <div
                       key={assignment.route_id}
-                      className="bg-white rounded-xl shadow-lg p-6"
+                      className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6"
                     >
-                      <h3 className="text-2xl font-bold text-gray-900 mb-4">
+                      <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
                         {assignment.route_name || "Route"}
                       </h3>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                         <div>
-                          <span className="text-gray-600">Route:</span>
-                          <p className="font-semibold">
+                          <span className="text-gray-600 dark:text-gray-400">Route:</span>
+                          <p className="font-semibold text-gray-900 dark:text-white">
                             {assignment.start_location} → {assignment.end_location}
                           </p>
                         </div>
                         {assignment.plate_number && (
                           <div>
-                            <span className="text-gray-600">Vehicle:</span>
-                            <p className="font-semibold">{assignment.plate_number}</p>
+                            <span className="text-gray-600 dark:text-gray-400">Vehicle:</span>
+                            <p className="font-semibold text-gray-900 dark:text-white">{assignment.plate_number}</p>
                           </div>
                         )}
                         {assignment.expected_start_time && (
                           <div>
-                            <span className="text-gray-600">Start Time:</span>
-                            <p className="font-semibold text-blue-600">
+                            <span className="text-gray-600 dark:text-gray-400">Start Time:</span>
+                            <p className="font-semibold text-blue-600 dark:text-blue-400">
                               {new Date(assignment.expected_start_time).toLocaleString()}
                             </p>
                           </div>
                         )}
                         <div>
-                          <span className="text-gray-600">Status:</span>
-                          <p className="font-semibold text-green-600">Active</p>
+                          <span className="text-gray-600 dark:text-gray-400">Status:</span>
+                          <p className="font-semibold text-green-600 dark:text-green-400">Active</p>
                         </div>
                       </div>
                     </div>
@@ -486,21 +508,21 @@ const DriverDashboard = () => {
 
             {/* Passengers Tab */}
             {activeTab === "passengers" && (
-              <div className="bg-white rounded-xl shadow-lg p-6">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
                 <div className="flex justify-between items-center mb-6">
-                  <h2 className="text-2xl font-bold text-gray-900">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                     Passengers ({passengers.length})
                   </h2>
                   <button
                     onClick={loadData}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600"
                   >
                     Refresh
                   </button>
                 </div>
 
                 {passengers.length === 0 ? (
-                  <div className="text-center py-12 text-gray-500">
+                  <div className="text-center py-12 text-gray-500 dark:text-gray-400">
                     No passengers for this vehicle yet
                   </div>
                 ) : (
@@ -508,39 +530,39 @@ const DriverDashboard = () => {
                     {passengers.map((passenger) => (
                       <div
                         key={passenger.ticket_id}
-                        className="border-2 border-gray-200 rounded-lg p-4 hover:border-blue-600 transition-all"
+                        className="border-2 border-gray-200 dark:border-gray-700 rounded-lg p-4 hover:border-blue-600 dark:hover:border-blue-500 transition-all"
                       >
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
-                            <h3 className="text-lg font-bold text-gray-900">
+                            <h3 className="text-lg font-bold text-gray-900 dark:text-white">
                               {passenger.passenger_name}
                             </h3>
                             <div className="grid grid-cols-2 gap-4 mt-2 text-sm">
                               <div>
-                                <span className="text-gray-600">Phone:</span>
-                                <p className="font-semibold">{passenger.passenger_phone}</p>
+                                <span className="text-gray-600 dark:text-gray-400">Phone:</span>
+                                <p className="font-semibold text-gray-900 dark:text-white">{passenger.passenger_phone}</p>
                               </div>
                               {passenger.seat_number && (
                                 <div>
-                                  <span className="text-gray-600">Seat:</span>
-                                  <p className="font-semibold">{passenger.seat_number}</p>
+                                  <span className="text-gray-600 dark:text-gray-400">Seat:</span>
+                                  <p className="font-semibold text-gray-900 dark:text-white">{passenger.seat_number}</p>
                                 </div>
                               )}
                               <div>
-                                <span className="text-gray-600">Route:</span>
-                                <p className="font-semibold">{passenger.route_name}</p>
+                                <span className="text-gray-600 dark:text-gray-400">Route:</span>
+                                <p className="font-semibold text-gray-900 dark:text-white">{passenger.route_name}</p>
                               </div>
                               {(passenger.actual_start_location || passenger.actual_end_location) && (
                                 <div>
-                                  <span className="text-gray-600">Journey:</span>
-                                  <p className="font-semibold text-blue-600">
+                                  <span className="text-gray-600 dark:text-gray-400">Journey:</span>
+                                  <p className="font-semibold text-blue-600 dark:text-blue-400">
                                     {passenger.actual_start_location || passenger.start_location} → {passenger.actual_end_location || passenger.end_location}
                                   </p>
                                 </div>
                               )}
                               <div>
-                                <span className="text-gray-600">QR Code:</span>
-                                <p className="font-mono text-xs">{passenger.qr_code || "N/A"}</p>
+                                <span className="text-gray-600 dark:text-gray-400">QR Code:</span>
+                                <p className="font-mono text-xs text-gray-900 dark:text-white">{passenger.qr_code || "N/A"}</p>
                               </div>
                             </div>
                           </div>
@@ -548,8 +570,8 @@ const DriverDashboard = () => {
                             <span
                               className={`px-3 py-1 rounded-full text-xs font-semibold ${
                                 passenger.boarding_status === "confirmed"
-                                  ? "bg-green-100 text-green-800"
-                                  : "bg-yellow-100 text-yellow-800"
+                                  ? "bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300"
+                                  : "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300"
                               }`}
                             >
                               {passenger.boarding_status || "Pending"}
@@ -557,7 +579,7 @@ const DriverDashboard = () => {
                             {passenger.boarding_status !== "confirmed" && (
                               <button
                                 onClick={() => handleConfirmBoarding(passenger.ticket_id)}
-                                className="mt-2 block w-full px-3 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                                className="mt-2 block w-full px-3 py-1 bg-green-600 dark:bg-green-700 text-white text-xs rounded hover:bg-green-700 dark:hover:bg-green-600"
                               >
                                 Confirm
                               </button>
@@ -573,12 +595,12 @@ const DriverDashboard = () => {
 
             {/* QR Scanner Tab */}
             {activeTab === "scanner" && (
-              <div className="bg-white rounded-xl shadow-lg p-6">
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">Scan Ticket QR Code</h2>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Scan Ticket QR Code</h2>
                 
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                       Enter QR Code
                     </label>
                     <input
@@ -586,10 +608,10 @@ const DriverDashboard = () => {
                       value={qrCodeInput}
                       onChange={(e) => setQrCodeInput(e.target.value)}
                       placeholder="Enter or scan QR code..."
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       onKeyPress={(e) => e.key === "Enter" && handleScanTicket()}
                     />
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       You can manually enter the QR code or use a QR scanner app
                     </p>
                   </div>
@@ -597,24 +619,24 @@ const DriverDashboard = () => {
                   <button
                     onClick={handleScanTicket}
                     disabled={scanning || !qrCodeInput.trim()}
-                    className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full px-6 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg font-semibold hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {scanning ? "Scanning..." : "Scan Ticket"}
                   </button>
 
                   {scannedTicket && (
-                    <div className="mt-6 p-4 bg-green-50 border-2 border-green-200 rounded-lg">
-                      <h3 className="font-bold text-green-800 mb-2">✅ Valid Ticket</h3>
+                    <div className="mt-6 p-4 bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 rounded-lg">
+                      <h3 className="font-bold text-green-800 dark:text-green-300 mb-2">✅ Valid Ticket</h3>
                       <div className="space-y-2 text-sm">
-                        <p><span className="font-semibold">Passenger:</span> {scannedTicket.passenger_name}</p>
-                        <p><span className="font-semibold">Phone:</span> {scannedTicket.passenger_phone}</p>
+                        <p className="text-gray-900 dark:text-white"><span className="font-semibold">Passenger:</span> {scannedTicket.passenger_name}</p>
+                        <p className="text-gray-900 dark:text-white"><span className="font-semibold">Phone:</span> {scannedTicket.passenger_phone}</p>
                         {scannedTicket.seat_number && (
-                          <p><span className="font-semibold">Seat:</span> {scannedTicket.seat_number}</p>
+                          <p className="text-gray-900 dark:text-white"><span className="font-semibold">Seat:</span> {scannedTicket.seat_number}</p>
                         )}
-                        <p><span className="font-semibold">Route:</span> {scannedTicket.route_name}</p>
+                        <p className="text-gray-900 dark:text-white"><span className="font-semibold">Route:</span> {scannedTicket.route_name}</p>
                         <button
                           onClick={() => handleConfirmBoarding(scannedTicket.ticket_id)}
-                          className="mt-4 w-full px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold"
+                          className="mt-4 w-full px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 font-semibold"
                         >
                           Confirm Boarding
                         </button>
@@ -627,14 +649,14 @@ const DriverDashboard = () => {
 
             {/* Journey Tab */}
             {activeTab === "journey" && (
-              <div className="bg-white rounded-xl shadow-lg p-6 space-y-6">
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 space-y-6">
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900 mb-4">Journey Management</h2>
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Journey Management</h2>
                   
                   {!journeyStarted && (
                     <button
                       onClick={handleStartJourney}
-                      className="w-full px-6 py-4 bg-green-600 text-white rounded-lg font-bold text-lg hover:bg-green-700 shadow-lg mb-6"
+                      className="w-full px-6 py-4 bg-green-600 dark:bg-green-700 text-white rounded-lg font-bold text-lg hover:bg-green-700 dark:hover:bg-green-600 shadow-lg mb-6"
                     >
                       🚀 Start Journey
                     </button>
@@ -642,17 +664,17 @@ const DriverDashboard = () => {
 
                   {journeyStarted && (
                     <div className="mb-6 space-y-4">
-                      <div className="p-4 bg-green-50 border-2 border-green-200 rounded-lg flex justify-between items-center">
-                        <p className="text-green-800 font-semibold">✅ Journey in Progress</p>
+                      <div className="p-4 bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 rounded-lg flex justify-between items-center">
+                        <p className="text-green-800 dark:text-green-300 font-semibold">✅ Journey in Progress</p>
                         {autoGpsTracking && (
-                          <span className="text-sm bg-green-600 text-white px-3 py-1 rounded-full">
+                          <span className="text-sm bg-green-600 dark:bg-green-700 text-white px-3 py-1 rounded-full">
                             📡 GPS Tracking Active
                           </span>
                         )}
                       </div>
                       <button
                         onClick={handleStopJourney}
-                        className="w-full px-6 py-4 bg-red-600 text-white rounded-lg font-bold text-lg hover:bg-red-700 shadow-lg"
+                        className="w-full px-6 py-4 bg-red-600 dark:bg-red-700 text-white rounded-lg font-bold text-lg hover:bg-red-700 dark:hover:bg-red-600 shadow-lg"
                       >
                         🛑 Stop Journey
                       </button>
@@ -661,11 +683,11 @@ const DriverDashboard = () => {
 
                   {/* Embedded Map View */}
                   {gpsCoordinates.latitude && gpsCoordinates.longitude && (
-                    <div className="bg-white border-2 border-gray-200 rounded-lg p-4 mb-4">
-                      <h3 className="text-xl font-bold text-gray-900 mb-3 flex items-center gap-2">
+                    <div className="bg-white dark:bg-gray-800 border-2 border-gray-200 dark:border-gray-700 rounded-lg p-4 mb-4">
+                      <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
                         🗺️ Your Current Location
                         {autoGpsTracking && (
-                          <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full">
+                          <span className="text-xs bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 px-2 py-1 rounded-full">
                             Live
                           </span>
                         )}
@@ -679,7 +701,7 @@ const DriverDashboard = () => {
                         showPopup={true}
                       />
                       {lastLocationUpdate && (
-                        <p className="text-xs text-gray-500 mt-2">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                           Last GPS update: {lastLocationUpdate.toLocaleTimeString()}
                         </p>
                       )}
@@ -687,21 +709,21 @@ const DriverDashboard = () => {
                   )}
 
                   <div className="space-y-4">
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                      <h3 className="font-semibold text-blue-900 mb-2">📍 GPS Tracking</h3>
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+                      <h3 className="font-semibold text-blue-900 dark:text-blue-300 mb-2">📍 GPS Tracking</h3>
                       {!autoGpsTracking ? (
                         <>
                           <button
                             onClick={getCurrentPosition}
                             disabled={gettingLocation}
-                            className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 mb-2"
+                            className="w-full px-4 py-3 bg-blue-600 dark:bg-blue-700 text-white rounded-lg font-semibold hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 mb-2"
                           >
                             {gettingLocation ? "Getting GPS Location..." : "📡 Get My GPS Location"}
                           </button>
                           {journeyStarted && (
                             <button
                               onClick={startAutomaticGpsTracking}
-                              className="w-full px-4 py-3 bg-green-600 text-white rounded-lg font-semibold hover:bg-green-700"
+                              className="w-full px-4 py-3 bg-green-600 dark:bg-green-700 text-white rounded-lg font-semibold hover:bg-green-700 dark:hover:bg-green-600"
                             >
                               🚀 Start Automatic GPS Tracking
                             </button>
@@ -710,17 +732,17 @@ const DriverDashboard = () => {
                       ) : (
                         <button
                           onClick={stopAutomaticGpsTracking}
-                          className="w-full px-4 py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700"
+                          className="w-full px-4 py-3 bg-red-600 dark:bg-red-700 text-white rounded-lg font-semibold hover:bg-red-700 dark:hover:bg-red-600"
                         >
                           ⏹️ Stop Automatic GPS Tracking
                         </button>
                       )}
                       {gpsCoordinates.latitude && gpsCoordinates.longitude && (
-                        <div className="mt-3 p-3 bg-white rounded border border-blue-200">
-                          <p className="text-sm text-gray-700">
+                        <div className="mt-3 p-3 bg-white dark:bg-gray-700 rounded border border-blue-200 dark:border-blue-800">
+                          <p className="text-sm text-gray-700 dark:text-gray-300">
                             <span className="font-semibold">Latitude:</span> {gpsCoordinates.latitude.toFixed(6)}
                           </p>
-                          <p className="text-sm text-gray-700">
+                          <p className="text-sm text-gray-700 dark:text-gray-300">
                             <span className="font-semibold">Longitude:</span> {gpsCoordinates.longitude.toFixed(6)}
                           </p>
                         </div>
@@ -728,7 +750,7 @@ const DriverDashboard = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Current Location (Optional if GPS used)
                       </label>
                       <input
@@ -736,12 +758,12 @@ const DriverDashboard = () => {
                         value={currentLocation}
                         onChange={(e) => setCurrentLocation(e.target.value)}
                         placeholder="Enter location name (e.g., City Center, Mile 15)"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Estimated Arrival Time (Optional)
                       </label>
                       <input
@@ -749,7 +771,7 @@ const DriverDashboard = () => {
                         value={estimatedArrival}
                         onChange={(e) => setEstimatedArrival(e.target.value)}
                         placeholder="e.g., Arriving in 30 minutes"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
 
@@ -757,7 +779,7 @@ const DriverDashboard = () => {
                       <button
                         onClick={handleUpdateLocation}
                         disabled={!currentLocation.trim() && (!gpsCoordinates.latitude || !gpsCoordinates.longitude)}
-                        className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-green-600 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-green-700 disabled:opacity-50 shadow-lg"
+                        className="flex-1 px-6 py-3 bg-gradient-to-r from-blue-600 to-green-600 dark:from-blue-700 dark:to-green-700 text-white rounded-lg font-semibold hover:from-blue-700 hover:to-green-700 dark:hover:from-blue-600 dark:hover:to-green-600 disabled:opacity-50 shadow-lg"
                       >
                         📍 Update Location
                       </button>
@@ -765,14 +787,14 @@ const DriverDashboard = () => {
                         <button
                           onClick={startAutoLocationUpdates}
                           disabled={!currentLocation.trim()}
-                          className="flex-1 px-6 py-3 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 disabled:opacity-50"
+                          className="flex-1 px-6 py-3 bg-purple-600 dark:bg-purple-700 text-white rounded-lg font-semibold hover:bg-purple-700 dark:hover:bg-purple-600 disabled:opacity-50"
                         >
                           🔄 Auto (30min)
                         </button>
                       ) : (
                         <button
                           onClick={stopAutoLocationUpdates}
-                          className="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700"
+                          className="flex-1 px-6 py-3 bg-red-600 dark:bg-red-700 text-white rounded-lg font-semibold hover:bg-red-700 dark:hover:bg-red-600"
                         >
                           ⏹️ Stop Auto
                         </button>

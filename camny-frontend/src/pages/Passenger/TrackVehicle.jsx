@@ -1,13 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { useNavigate, useParams } from "react-router-dom";
-import axios from "axios";
+import { getMyVehicleLocation } from "../../services/api";
 import MapView from "../../components/Maps/MapView";
-import { useTranslation } from "react-i18next";
-import "../../i18n"; // ensure i18n is initialized
 
 const TrackVehicle = () => {
-  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   const navigate = useNavigate();
   const { ticketId } = useParams();
@@ -39,109 +36,102 @@ const TrackVehicle = () => {
       if (!silent) setLoading(true);
       setError(null);
 
-      const token = localStorage.getItem("token");
-      const response = await axios.get(
-        `http://localhost:5000/api/tracking/my-vehicle/${ticketId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      );
-
+      const response = await getMyVehicleLocation(ticketId);
       setVehicleData(response.data);
     } catch (err) {
       console.error("Error loading vehicle location:", err);
-      setError(err.response?.data?.error || t("trackVehicle.errors.loadLocation"));
+      setError(err.response?.data?.error || "Unable to load vehicle location");
     } finally {
       if (!silent) setLoading(false);
     }
   };
 
   const calculateTimeAgo = (timestamp) => {
-    if (!timestamp) return t("trackVehicle.unknown");
+    if (!timestamp) return "Unknown";
     const now = new Date();
     const then = new Date(timestamp);
     const diffMs = now - then;
     const diffMins = Math.floor(diffMs / 60000);
 
-    if (diffMins < 1) return t("trackVehicle.justNow");
-    if (diffMins < 60) return t("trackVehicle.minutesAgo", { count: diffMins });
+    if (diffMins < 1) return "Just now";
+    if (diffMins < 60) return `${diffMins} min ago`;
     const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return t("trackVehicle.hoursAgo", { count: diffHours });
+    if (diffHours < 24) return `${diffHours} hr${diffHours > 1 ? "s" : ""} ago`;
     const diffDays = Math.floor(diffHours / 24);
-    return t("trackVehicle.daysAgo", { count: diffDays });
+    return `${diffDays} day${diffDays > 1 ? "s" : ""} ago`;
   };
 
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex justify-between items-center mb-8">
           <div>
-            <h1 className="text-4xl font-extrabold text-gray-900 mb-2">{t("trackVehicle.title")}</h1>
-            <p className="text-gray-600">{t("trackVehicle.subtitle")}</p>
+            <h1 className="text-4xl font-extrabold text-gray-900 dark:text-white mb-2">Track Vehicle</h1>
+            <p className="text-gray-600 dark:text-gray-400">Real-time location tracking for your journey</p>
           </div>
           <div className="flex gap-4">
             <button
               onClick={() => navigate("/passenger/my-tickets")}
-              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              className="px-4 py-2 bg-gray-600 dark:bg-gray-700 text-white rounded-lg hover:bg-gray-700 dark:hover:bg-gray-600 transition-colors"
             >
-              ← {t("trackVehicle.backToTickets")}
+              ← Back to Tickets
             </button>
             <button
               onClick={() => loadVehicleLocation()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
             >
-              🔄 {t("common.refresh")}
+              🔄 Refresh
             </button>
           </div>
         </div>
 
         {loading ? (
           <div className="flex justify-center items-center h-64">
-            <div className="text-xl text-gray-500">{t("trackVehicle.loading")}</div>
+            <div className="text-xl text-gray-500 dark:text-gray-400">Loading vehicle location...</div>
           </div>
         ) : error ? (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-8 text-center">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-8 text-center">
             <div className="text-5xl mb-4">⚠️</div>
-            <h3 className="text-2xl font-bold text-red-900 mb-2">{t("trackVehicle.errorTitle")}</h3>
-            <p className="text-red-700">{error}</p>
+            <h3 className="text-2xl font-bold text-red-900 dark:text-red-300 mb-2">Error Loading Location</h3>
+            <p className="text-red-700 dark:text-red-400">{error}</p>
             <button
               onClick={() => loadVehicleLocation()}
-              className="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              className="mt-4 px-6 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-600 transition-colors"
             >
-              {t("trackVehicle.tryAgain")}
+              Try Again
             </button>
           </div>
         ) : vehicleData ? (
           <div className="space-y-6">
-            <div className="bg-white rounded-xl shadow-lg p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
               <div className="flex justify-between items-start mb-6">
                 <div>
-                  <h2 className="text-2xl font-bold text-gray-900 mb-1">
+                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-1">
                     {vehicleData.ticket.route_name}
                   </h2>
-                  <p className="text-gray-600">
+                  <p className="text-gray-600 dark:text-gray-400">
                     {vehicleData.ticket.start_location} → {vehicleData.ticket.end_location}
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-sm text-gray-600">{t("trackVehicle.vehicle")}</p>
-                  <p className="text-lg font-bold text-gray-900">
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Vehicle</p>
+                  <p className="text-lg font-bold text-gray-900 dark:text-white">
                     {vehicleData.ticket.plate_number}
                   </p>
-                  <p className="text-sm text-gray-600">{vehicleData.ticket.vehicle_model}</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">{vehicleData.ticket.vehicle_model}</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <div className="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-600">
-                  <p className="text-sm text-gray-600 mb-1">{t("dashboard.ticketId")}</p>
-                  <p className="font-mono font-bold text-gray-900">#{vehicleData.ticket.ticket_id}</p>
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg border-l-4 border-blue-600">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Ticket ID</p>
+                  <p className="font-mono font-bold text-gray-900 dark:text-white">#{vehicleData.ticket.ticket_id}</p>
                 </div>
-                <div className="bg-green-50 p-4 rounded-lg border-l-4 border-green-600">
-                  <p className="text-sm text-gray-600 mb-1">{t("myTickets.seat")}</p>
-                  <p className="font-bold text-gray-900">{vehicleData.ticket.seat_number}</p>
+                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg border-l-4 border-green-600">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Seat</p>
+                  <p className="font-bold text-gray-900 dark:text-white">{vehicleData.ticket.seat_number || "N/A"}</p>
                 </div>
               </div>
 
@@ -153,7 +143,7 @@ const TrackVehicle = () => {
                     onChange={(e) => setAutoRefresh(e.target.checked)}
                     className="w-5 h-5"
                   />
-                  <span className="text-gray-700">{t("trackVehicle.autoRefresh")}</span>
+                  <span className="text-gray-700 dark:text-gray-300">Auto-refresh (10s)</span>
                 </label>
               </div>
             </div>
@@ -161,11 +151,11 @@ const TrackVehicle = () => {
             {vehicleData.location ? (
               <>
                 {/* Embedded Map View */}
-                <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-                  <h3 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                    🗺️ {t("trackVehicle.liveMap")}
-                    <span className="text-sm font-normal text-green-600 bg-green-100 px-3 py-1 rounded-full">
-                      ● {t("trackVehicle.live")}
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-6">
+                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    🗺️ Live Map
+                    <span className="text-sm font-normal text-green-600 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-3 py-1 rounded-full">
+                      ● Live
                     </span>
                   </h3>
                   <MapView
@@ -176,38 +166,38 @@ const TrackVehicle = () => {
                     zoom={15}
                     showPopup={true}
                   />
-                  <div className="mt-4 flex justify-between items-center text-sm text-gray-600">
-                    <span>{t("trackVehicle.lastUpdated")}: {calculateTimeAgo(vehicleData.location.last_updated)}</span>
+                  <div className="mt-4 flex justify-between items-center text-sm text-gray-600 dark:text-gray-400">
+                    <span>Last updated: {calculateTimeAgo(vehicleData.location.last_updated)}</span>
                     <a
                       href={`https://www.google.com/maps?q=${vehicleData.location.latitude},${vehicleData.location.longitude}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-blue-600 hover:text-blue-800 font-semibold"
+                      className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 font-semibold"
                     >
-                      {t("trackVehicle.openGoogleMaps")}
+                      Open in Google Maps
                     </a>
                   </div>
                 </div>
 
                 <div className="bg-gradient-to-r from-green-500 to-blue-500 rounded-xl shadow-lg p-8 text-white">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-2xl font-bold">📍 {t("trackVehicle.currentLocation")}</h3>
+                    <h3 className="text-2xl font-bold">📍 Current Location</h3>
                     <span className="bg-white bg-opacity-20 px-4 py-2 rounded-lg text-sm">
-                      {t("trackVehicle.liveTracking")}
+                      Live Tracking
                     </span>
                   </div>
 
                   <div className="bg-white bg-opacity-20 rounded-lg p-6 mb-4">
                     <p className="text-3xl font-bold mb-2">
-                      {vehicleData.location.current_location || t("trackVehicle.updating")}
+                      {vehicleData.location.current_location || "Updating location..."}
                     </p>
                     <div className="flex gap-6 text-sm">
                       <div>
-                        <span className="opacity-80">{t("trackVehicle.latitude")}: </span>
+                        <span className="opacity-80">Latitude: </span>
                         <span className="font-mono font-semibold">{vehicleData.location.latitude}</span>
                       </div>
                       <div>
-                        <span className="opacity-80">{t("trackVehicle.longitude")}: </span>
+                        <span className="opacity-80">Longitude: </span>
                         <span className="font-mono font-semibold">{vehicleData.location.longitude}</span>
                       </div>
                     </div>
@@ -216,75 +206,74 @@ const TrackVehicle = () => {
                   <div className="grid grid-cols-3 gap-4">
                     {vehicleData.location.speed && (
                       <div className="bg-white bg-opacity-20 rounded-lg p-4">
-                        <p className="text-sm opacity-80 mb-1">{t("trackVehicle.speed")}</p>
+                        <p className="text-sm opacity-80 mb-1">Speed</p>
                         <p className="text-2xl font-bold">{vehicleData.location.speed} km/h</p>
                       </div>
                     )}
                     {vehicleData.location.heading && (
                       <div className="bg-white bg-opacity-20 rounded-lg p-4">
-                        <p className="text-sm opacity-80 mb-1">{t("trackVehicle.heading")}</p>
+                        <p className="text-sm opacity-80 mb-1">Heading</p>
                         <p className="text-2xl font-bold">{vehicleData.location.heading}°</p>
                       </div>
                     )}
                     {vehicleData.location.estimated_arrival && (
                       <div className="bg-white bg-opacity-20 rounded-lg p-4">
-                        <p className="text-sm opacity-80 mb-1">{t("trackVehicle.eta")}</p>
+                        <p className="text-sm opacity-80 mb-1">ETA</p>
                         <p className="text-lg font-bold">{vehicleData.location.estimated_arrival}</p>
                       </div>
                     )}
                   </div>
 
                   <div className="mt-4 text-sm opacity-80">
-                    {t("trackVehicle.lastUpdated")}: {calculateTimeAgo(vehicleData.location.last_updated)}
+                    Last updated: {calculateTimeAgo(vehicleData.location.last_updated)}
                   </div>
                 </div>
 
-                <div className="bg-white rounded-xl shadow-lg p-6">
-                  <h3 className="text-xl font-bold text-gray-900 mb-4">{t("trackVehicle.locationDetails")}</h3>
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6">
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Location Details</h3>
                   <div className="space-y-3">
-                    <div className="flex justify-between py-2 border-b border-gray-200">
-                      <span className="text-gray-600">{t("trackVehicle.vehicleId")}</span>
-                      <span className="font-semibold">{vehicleData.location.vehicle_id}</span>
+                    <div className="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+                      <span className="text-gray-600 dark:text-gray-400">Vehicle ID</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">{vehicleData.location.vehicle_id}</span>
                     </div>
-                    <div className="flex justify-between py-2 border-b border-gray-200">
-                      <span className="text-gray-600">{t("trackVehicle.coordinates")}</span>
-                      <span className="font-mono font-semibold">
+                    <div className="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+                      <span className="text-gray-600 dark:text-gray-400">Coordinates</span>
+                      <span className="font-mono font-semibold text-gray-900 dark:text-white">
                         {vehicleData.location.latitude}, {vehicleData.location.longitude}
                       </span>
                     </div>
-                    <div className="flex justify-between py-2 border-b border-gray-200">
-                      <span className="text-gray-600">{t("trackVehicle.lastUpdate")}</span>
-                      <span className="font-semibold">
+                    <div className="flex justify-between py-2 border-b border-gray-200 dark:border-gray-700">
+                      <span className="text-gray-600 dark:text-gray-400">Last Update</span>
+                      <span className="font-semibold text-gray-900 dark:text-white">
                         {new Date(vehicleData.location.last_updated).toLocaleString()}
                       </span>
                     </div>
                   </div>
-
                 </div>
               </>
             ) : (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-8 text-center">
+              <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-8 text-center">
                 <div className="text-6xl mb-4">🚗</div>
-                <h3 className="text-2xl font-bold text-yellow-900 mb-2">
-                  {t("trackVehicle.noLocationTitle")}
+                <h3 className="text-2xl font-bold text-yellow-900 dark:text-yellow-300 mb-2">
+                  Location Not Available Yet
                 </h3>
-                <p className="text-yellow-700 mb-4">
-                  {t("trackVehicle.noLocationSubtitle")}
+                <p className="text-yellow-700 dark:text-yellow-400 mb-4">
+                  The driver hasn't started sharing location yet. Please wait for the journey to begin.
                 </p>
                 <button
                   onClick={() => loadVehicleLocation()}
-                  className="px-6 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
+                  className="px-6 py-2 bg-yellow-600 dark:bg-yellow-700 text-white rounded-lg hover:bg-yellow-700 dark:hover:bg-yellow-600 transition-colors"
                 >
-                  {t("trackVehicle.checkAgain")}
+                  Check Again
                 </button>
               </div>
             )}
           </div>
         ) : (
-          <div className="bg-white rounded-xl shadow-lg p-12 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-12 text-center">
             <div className="text-6xl mb-4">❓</div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">{t("trackVehicle.noDataTitle")}</h3>
-            <p className="text-gray-600">{t("trackVehicle.noDataSubtitle")}</p>
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">No Data Available</h3>
+            <p className="text-gray-600 dark:text-gray-400">Unable to load vehicle information</p>
           </div>
         )}
       </div>

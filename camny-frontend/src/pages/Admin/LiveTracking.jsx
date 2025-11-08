@@ -45,7 +45,7 @@ const FleetMap = ({ vehicles }) => {
     : [0.3476, 32.5825]; // Kampala (fallback)
 
   return (
-    <div className="w-full rounded-2xl overflow-hidden shadow-xl border border-gray-200" style={{ height: "520px" }}>
+    <div className="w-full rounded-2xl overflow-hidden shadow-xl border border-gray-200 dark:border-gray-700" style={{ height: "520px" }}>
       <MapContainer
         center={defaultCenter}
         zoom={markers.length ? 12 : 5}
@@ -155,17 +155,17 @@ const LiveTracking = () => {
 
   return (
     <AdminLayout>
-      <div className="space-y-8">
+      <div className="space-y-8 dark:bg-gray-900 min-h-screen p-6">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-extrabold text-gray-900">🚦 Live Fleet Tracking</h1>
-            <p className="text-gray-600">
+            <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white">🚦 Live Fleet Tracking</h1>
+            <p className="text-gray-600 dark:text-gray-400">
               Monitor every active vehicle in real-time across all routes.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+            <label className="flex items-center gap-2 text-sm font-medium text-gray-700 dark:text-gray-300">
               <input
                 type="checkbox"
                 className="w-4 h-4"
@@ -176,129 +176,129 @@ const LiveTracking = () => {
             </label>
             <button
               onClick={() => loadLocations()}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+              className="px-4 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg font-semibold hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
             >
               🔄 Refresh Now
             </button>
-            <div className="text-xs text-gray-500">
+            <div className="text-xs text-gray-500 dark:text-gray-400">
               Last updated: {lastRefreshedAt ? lastRefreshedAt.toLocaleTimeString() : "--"}
             </div>
           </div>
         </div>
 
         {loading ? (
-          <div className="flex justify-center items-center h-64 bg-white rounded-2xl shadow-lg">
-            <div className="text-xl text-gray-500">Loading live vehicle positions...</div>
+          <div className="flex justify-center items-center h-64 bg-white dark:bg-gray-800 rounded-2xl shadow-lg">
+            <div className="text-xl text-gray-500 dark:text-gray-400">Loading live vehicle positions...</div>
           </div>
         ) : error ? (
-          <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl p-8 text-center">
             <div className="text-5xl mb-4">⚠️</div>
-            <h3 className="text-2xl font-bold text-red-900 mb-2">GPS Tracking Unavailable</h3>
-            <p className="text-red-700">{error}</p>
+            <h3 className="text-2xl font-bold text-red-900 dark:text-red-300 mb-2">GPS Tracking Unavailable</h3>
+            <p className="text-red-700 dark:text-red-400">{error}</p>
             <button
               onClick={() => loadLocations()}
-              className="mt-4 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              className="mt-4 px-6 py-2 bg-red-600 dark:bg-red-700 text-white rounded-lg hover:bg-red-700 dark:hover:bg-red-600 transition-colors"
             >
               Try Again
             </button>
           </div>
         ) : vehicles.length === 0 ? (
-          <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-12 text-center">
             <div className="text-6xl mb-4">🚗</div>
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">No Live Vehicles</h3>
-            <p className="text-gray-600">
-              Once drivers enable GPS tracking, vehicles will appear here in real-time.
+            <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">No Active Journeys</h3>
+            <p className="text-gray-600 dark:text-gray-400">
+              Once drivers start journeys and enable GPS tracking, vehicles will appear here in real-time.
             </p>
           </div>
         ) : (
           <>
             <FleetMap vehicles={vehicles} />
 
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-3">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-6">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-3">
                 <span>Vehicle Activity Overview</span>
-                <span className="text-sm font-semibold text-green-700 bg-green-100 px-3 py-1 rounded-full">
+                <span className="text-sm font-semibold text-green-700 dark:text-green-400 bg-green-100 dark:bg-green-900/30 px-3 py-1 rounded-full">
                   {activeVehicles.length} active on map
                 </span>
-                <span className="text-sm font-semibold text-blue-700 bg-blue-100 px-3 py-1 rounded-full">
+                <span className="text-sm font-semibold text-blue-700 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/30 px-3 py-1 rounded-full">
                   {vehicles.length} total reporting
                 </span>
               </h2>
 
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-700">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
                         Vehicle
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
                         Route
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
                         Location
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
                         Coordinates
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
                         Speed
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
                         Driver
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
                         Last Update
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200 text-sm">
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700 text-sm">
                     {vehicles.map((vehicle) => (
-                      <tr key={vehicle.vehicle_id} className="hover:bg-gray-50">
+                      <tr key={vehicle.vehicle_id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                         <td className="px-4 py-3">
-                          <div className="font-semibold text-gray-900">{vehicle.plate_number || `Vehicle ${vehicle.vehicle_id}`}</div>
-                          <div className="text-xs text-gray-500">{vehicle.model || "Model N/A"}</div>
+                          <div className="font-semibold text-gray-900 dark:text-white">{vehicle.plate_number || `Vehicle ${vehicle.vehicle_id}`}</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">{vehicle.model || "Model N/A"}</div>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="text-gray-800 font-medium">{vehicle.route_name || "Not assigned"}</div>
-                          <div className="text-xs text-gray-500">
+                          <div className="text-gray-800 dark:text-gray-200 font-medium">{vehicle.route_name || "Not assigned"}</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
                             {vehicle.start_location && vehicle.end_location
                               ? `${vehicle.start_location} → ${vehicle.end_location}`
                               : ""}
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="text-gray-900">{vehicle.current_location || "GPS only"}</div>
+                          <div className="text-gray-900 dark:text-gray-100">{vehicle.current_location || "GPS only"}</div>
                           {vehicle.estimated_arrival && (
-                            <div className="text-xs text-green-600 font-semibold mt-1">
+                            <div className="text-xs text-green-600 dark:text-green-400 font-semibold mt-1">
                               ETA: {vehicle.estimated_arrival}
                             </div>
                           )}
                         </td>
                         <td className="px-4 py-3">
                           {vehicle.latitude && vehicle.longitude ? (
-                            <div className="font-mono text-xs text-gray-700">
+                            <div className="font-mono text-xs text-gray-700 dark:text-gray-300">
                               {Number(vehicle.latitude).toFixed(5)}, {" "}
                               {Number(vehicle.longitude).toFixed(5)}
                             </div>
                           ) : (
-                            <span className="text-xs text-gray-400">No coordinates</span>
+                            <span className="text-xs text-gray-400 dark:text-gray-500">No coordinates</span>
                           )}
                         </td>
                         <td className="px-4 py-3">
                           {vehicle.speed ? (
-                            <span className="font-semibold text-blue-600">{vehicle.speed} km/h</span>
+                            <span className="font-semibold text-blue-600 dark:text-blue-400">{vehicle.speed} km/h</span>
                           ) : (
-                            <span className="text-xs text-gray-400">--</span>
+                            <span className="text-xs text-gray-400 dark:text-gray-500">--</span>
                           )}
                         </td>
                         <td className="px-4 py-3">
-                          <div className="text-gray-800">{vehicle.driver_name || "N/A"}</div>
-                          <div className="text-xs text-gray-500">Driver ID: {vehicle.driver_id || "--"}</div>
+                          <div className="text-gray-800 dark:text-gray-200">{vehicle.driver_name || "N/A"}</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">Driver ID: {vehicle.driver_id || "--"}</div>
                         </td>
-                        <td className="px-4 py-3 text-xs text-gray-600">
+                        <td className="px-4 py-3 text-xs text-gray-600 dark:text-gray-400">
                           <div>{vehicle.last_updated ? new Date(vehicle.last_updated).toLocaleString() : "Unknown"}</div>
-                          <div className="text-green-600 font-medium">{calculateTimeAgo(vehicle.last_updated)}</div>
+                          <div className="text-green-600 dark:text-green-400 font-medium">{calculateTimeAgo(vehicle.last_updated)}</div>
                         </td>
                       </tr>
                     ))}

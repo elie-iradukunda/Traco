@@ -50,8 +50,8 @@ const App = () => {
     <ThemeProvider>
       <AuthProvider>
         <Router>
-            {/* Routes */}
-            <Routes>
+        {/* Routes */}
+        <Routes>
           {/* Public */}
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
@@ -202,14 +202,14 @@ const App = () => {
               />
 
           {/* Fallback */}
-              <Route path="*" element={<div className="p-4">Page not found</div>} />
-            </Routes>
-
+          <Route path="*" element={<div className="p-4">Page not found</div>} />
+        </Routes>
+        
             {/* Global Tools */}
-            <Chatbot />
-          </Router>
-        </AuthProvider>
-      </ThemeProvider>
+        <Chatbot />
+      </Router>
+    </AuthProvider>
+    </ThemeProvider>
   );
 };
 

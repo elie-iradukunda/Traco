@@ -16,17 +16,42 @@ export const ThemeProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : false;
   });
 
+  // Apply theme on mount and when darkMode changes
   useEffect(() => {
-    localStorage.setItem("darkMode", JSON.stringify(darkMode));
+    const root = document.documentElement;
     if (darkMode) {
-      document.documentElement.classList.add("dark");
+      root.classList.add("dark");
     } else {
-      document.documentElement.classList.remove("dark");
+      root.classList.remove("dark");
     }
+    localStorage.setItem("darkMode", JSON.stringify(darkMode));
   }, [darkMode]);
 
+  // Ensure initial theme is applied on mount
+  useEffect(() => {
+    const root = document.documentElement;
+    const saved = localStorage.getItem("darkMode");
+    const isDark = saved ? JSON.parse(saved) : false;
+    
+    if (isDark) {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+  }, []);
+
   const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
+    setDarkMode((prev) => {
+      const newValue = !prev;
+      // Immediately update the DOM class
+      const root = document.documentElement;
+      if (newValue) {
+        root.classList.add("dark");
+      } else {
+        root.classList.remove("dark");
+      }
+      return newValue;
+    });
   };
 
   return (

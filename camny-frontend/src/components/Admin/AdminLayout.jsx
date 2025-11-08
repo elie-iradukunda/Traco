@@ -21,8 +21,8 @@ const AdminLayout = ({ children }) => {
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
-      <header className="bg-white shadow-lg sticky top-0 z-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      <header className="bg-white dark:bg-gray-800 shadow-lg sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link to="/admin/dashboard" className="flex items-center">
@@ -37,8 +37,8 @@ const AdminLayout = ({ children }) => {
                   to={link.path}
                   className={`px-4 py-2 rounded-lg font-medium transition-colors ${
                     location.pathname === link.path
-                      ? "bg-blue-600 text-white"
-                      : "text-gray-700 hover:bg-gray-100"
+                      ? "bg-blue-600 dark:bg-blue-700 text-white"
+                      : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                   }`}
                 >
                   {link.label}
